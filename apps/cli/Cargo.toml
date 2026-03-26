@@ -1,0 +1,20 @@
+[package]
+name = "schemeweaver"
+version = "0.1.0"
+edition = "2021"
+description = "Generate semantic SVG diagrams from prompts"
+license = "MIT"
+
+[[bin]]
+name = "schemeweaver"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+indicatif = "0.17"
+colored = "2"

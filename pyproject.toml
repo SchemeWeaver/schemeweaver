@@ -1,0 +1,20 @@
+[tool.uv.workspace]
+members = ["libs/core", "libs/svgkit", "apis/server", "jobs/worker"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["libs/core/tests", "libs/svgkit/tests", "apis/server/tests", "jobs/worker/tests"]

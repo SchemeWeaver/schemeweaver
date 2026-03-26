@@ -1,0 +1,6 @@
+{
+  "name": "schemeweaver-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Scheme Weaver web editor (Nuxt 4 + Vue 3)"
+}

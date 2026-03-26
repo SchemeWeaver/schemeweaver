@@ -1,0 +1,17 @@
+[project]
+name = "schemeweaver-core"
+version = "0.1.0"
+description = "Core pipeline: Claude → DIR → SVG"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.40.0",
+    "pydantic>=2.0",
+    "svgwrite>=1.4.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["schemeweaver_core"]
