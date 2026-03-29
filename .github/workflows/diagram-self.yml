@@ -1,0 +1,45 @@
+name: Regenerate architecture diagram
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'libs/core/**'
+      - 'apis/server/**'
+      - 'apps/cli/**'
+      - 'jobs/worker/**'
+      - '.github/workflows/diagram-self.yml'
+  workflow_dispatch:
+
+jobs:
+  diagram:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Generate architecture diagram
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          uv run python apis/server/scripts/test_generate.py \
+            --provider anthropic \
+            --model claude-sonnet-4-6 \
+            --self
+
+      - name: Commit updated diagram
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: regenerate architecture diagram [skip ci]"
+          file_pattern: "docs/diagrams/**"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"

@@ -1,0 +1,39 @@
+/* Vue Flow canvas overrides */
+.vue-flow__container {
+  background: #f8f9fa;
+}
+
+.vue-flow__node {
+  cursor: default;
+}
+
+/* Node type colors — mirror renderer.py NODE_COLORS */
+.sw-node-user      { --node-fill: #e8f4f8; --node-stroke: #5bc0de; }
+.sw-node-gateway   { --node-fill: #fff3cd; --node-stroke: #f0ad4e; }
+.sw-node-service   { --node-fill: #f0f4ff; --node-stroke: #6c8ebf; }
+.sw-node-database  { --node-fill: #d4edda; --node-stroke: #5cb85c; }
+.sw-node-queue     { --node-fill: #fde8e8; --node-stroke: #d9534f; }
+.sw-node-storage   { --node-fill: #e2d9f3; --node-stroke: #9b59b6; }
+.sw-node-generic   { --node-fill: #f5f5f5; --node-stroke: #aaaaaa; }
+
+/* aws.* variants */
+.sw-node-aws\.api_gateway { --node-fill: #fff3cd; --node-stroke: #f0ad4e; }
+.sw-node-aws\.rds         { --node-fill: #d4edda; --node-stroke: #5cb85c; }
+.sw-node-aws\.s3          { --node-fill: #e2d9f3; --node-stroke: #9b59b6; }
+.sw-node-aws\.lambda      { --node-fill: #f0f4ff; --node-stroke: #6c8ebf; }
+.sw-node-aws\.ec2         { --node-fill: #f5f5f5; --node-stroke: #aaaaaa; }
+.sw-node-aws\.elasticache { --node-fill: #fde8e8; --node-stroke: #d9534f; }
+
+/* Complexity filter — hidden class toggled via JS */
+.sw-hidden {
+  display: none !important;
+}
+
+/* Scrollbar style for prompt bar */
+textarea::-webkit-scrollbar {
+  width: 6px;
+}
+textarea::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}

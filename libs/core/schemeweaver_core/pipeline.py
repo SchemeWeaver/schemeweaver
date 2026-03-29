@@ -1,8 +1,52 @@
 """Claude → DIR pipeline."""
 import json
-import os
-from anthropic import Anthropic
+import re
 from .models.dir import DIR
+from .providers.base import LLMProvider
+
+
+def _extract_json(raw: str) -> str:
+    """
+    Extract the first complete JSON object from a string.
+
+    Handles:
+    - Markdown code fences (```json ... ``` or ``` ... ```)
+    - Extra text before/after the JSON
+    - Trailing commentary after a valid JSON object
+    """
+    # Strip markdown code fences
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
+    if fenced:
+        return fenced.group(1)
+
+    # Find the outermost { ... } by tracking brace depth
+    start = raw.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("No JSON object found", raw, 0)
+
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(raw[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return raw[start : i + 1]
+
+    raise json.JSONDecodeError("Unterminated JSON object", raw, start)
 
 SYSTEM_PROMPT = """You are a diagram architect. Given a description, produce a Diagram Intermediate Representation (DIR) as JSON.
 
@@ -56,12 +100,37 @@ Rules:
 - Output ONLY valid JSON. No markdown code fences, no explanation."""
 
 
-class Pipeline:
-    """Generates a DIR from a natural-language prompt using Claude."""
+def _normalize_edges(data: dict) -> dict:
+    """Normalize from/to aliases to from_node/to_node before Pydantic validation."""
+    for edge in data.get("edges", []):
+        if "from" in edge and "from_node" not in edge:
+            edge["from_node"] = edge["from"]
+        if "to" in edge and "to_node" not in edge:
+            edge["to_node"] = edge["to"]
+    return data
 
-    def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-4-6"):
-        self.client = Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
-        self.model = model
+
+def _normalize_node(node: dict) -> dict:
+    """Fill in missing required fields on a node (and its children recursively)."""
+    if "label" not in node:
+        node["label"] = node.get("id", "unknown")
+    for child in node.get("children", []):
+        _normalize_node(child)
+    return node
+
+
+def _normalize_nodes(data: dict) -> dict:
+    """Normalize all nodes in the DIR, including nested children."""
+    for node in data.get("nodes", []):
+        _normalize_node(node)
+    return data
+
+
+class Pipeline:
+    """Generates and refines DIRs using a pluggable LLM provider."""
+
+    def __init__(self, provider: LLMProvider):
+        self.provider = provider
 
     def generate(self, prompt: str, context: str | None = None) -> DIR:
         """Generate a DIR from a prompt."""
@@ -69,23 +138,8 @@ class Pipeline:
         if context:
             user_message = f"{prompt}\n\nAdditional context:\n{context}"
 
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
-        )
-
-        raw = response.content[0].text.strip()
-        data = json.loads(raw)
-
-        # Handle edge aliases (from/to → from_node/to_node)
-        for edge in data.get("edges", []):
-            if "from" in edge and "from_node" not in edge:
-                edge["from_node"] = edge["from"]
-            if "to" in edge and "to_node" not in edge:
-                edge["to_node"] = edge["to"]
-
+        raw = self.provider.complete(SYSTEM_PROMPT, user_message)
+        data = _normalize_nodes(_normalize_edges(json.loads(_extract_json(raw))))
         return DIR.model_validate(data)
 
     def refine(self, current_dir: DIR, feedback: str) -> DIR:
@@ -99,20 +153,6 @@ Refine it based on this feedback:
 
 Output the complete updated DIR JSON."""
 
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
-        )
-
-        raw = response.content[0].text.strip()
-        data = json.loads(raw)
-
-        for edge in data.get("edges", []):
-            if "from" in edge and "from_node" not in edge:
-                edge["from_node"] = edge["from"]
-            if "to" in edge and "to_node" not in edge:
-                edge["to_node"] = edge["to"]
-
+        raw = self.provider.complete(SYSTEM_PROMPT, user_message)
+        data = _normalize_nodes(_normalize_edges(json.loads(_extract_json(raw))))
         return DIR.model_validate(data)

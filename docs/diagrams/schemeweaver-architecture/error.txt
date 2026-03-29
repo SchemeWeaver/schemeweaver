@@ -1,0 +1,27 @@
+Error after 71.49s:
+2 validation errors for DIR
+nodes.1.children.0.label
+  Field required [type=missing, input_value={'id': 'core-pipeline'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+nodes.1.children.1.label
+  Field required [type=missing, input_value={'id': 'renderer'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+
+Traceback:
+Traceback (most recent call last):
+  File "C:\Users\mackp\dev\mack\schemeweaver\apis\server\scripts\test_generate.py", line 144, in run_case
+    dir_result = pipeline.generate(prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mackp\dev\mack\schemeweaver\libs\core\schemeweaver_core\pipeline.py", line 127, in generate
+    return DIR.model_validate(data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mackp\dev\mack\schemeweaver\.venv\Lib\site-packages\pydantic\main.py", line 716, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 2 validation errors for DIR
+nodes.1.children.0.label
+  Field required [type=missing, input_value={'id': 'core-pipeline'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+nodes.1.children.1.label
+  Field required [type=missing, input_value={'id': 'renderer'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing

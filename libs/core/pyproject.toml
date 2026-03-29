@@ -5,6 +5,7 @@ description = "Core pipeline: Claude → DIR → SVG"
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.40.0",
+    "openai>=1.0",
     "pydantic>=2.0",
     "svgwrite>=1.4.3",
 ]

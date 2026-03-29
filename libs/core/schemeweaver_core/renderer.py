@@ -1,7 +1,11 @@
 """DIR → semantic SVG renderer."""
+import json
 import xml.etree.ElementTree as ET
 from .models.dir import DIR, DiagramNode, DiagramEdge, DiagramGroup, ComplexityLevel, NodeType
 from .layout import compute_layout, Layout, LayoutNode, NODE_W, NODE_H
+
+_SW_NS = "https://schemeweaver.dev/ns/1.0"
+ET.register_namespace("sw", _SW_NS)
 
 # Fill colors by node type category
 NODE_COLORS: dict[str, str] = {
@@ -55,6 +59,13 @@ class Renderer:
         """
         layout = compute_layout(dir)
 
+        # Count visible nodes upfront (needed for animation stagger CSS)
+        visible_nodes = [
+            n for n in dir.nodes
+            if (not active_complexity or self._is_visible(n.complexity, active_complexity))
+            and n.id in layout.nodes
+        ]
+
         svg = ET.Element("svg", {
             "xmlns": "http://www.w3.org/2000/svg",
             "viewBox": f"0 0 {layout.canvas_width:.0f} {layout.canvas_height:.0f}",
@@ -66,6 +77,11 @@ class Renderer:
             "data-diagram-type": dir.meta.diagram_type.value,
         })
 
+        # Embedded DIR JSON — round-trip source of truth
+        metadata = ET.SubElement(svg, "metadata")
+        sw_dir = ET.SubElement(metadata, f"{{{_SW_NS}}}dir")
+        sw_dir.text = dir.model_dump_json()
+
         # Accessibility: title + desc
         title_el = ET.SubElement(svg, "title")
         title_el.text = dir.meta.title
@@ -76,7 +92,7 @@ class Renderer:
         # Defs: CSS + arrowhead marker
         defs = ET.SubElement(svg, "defs")
         style = ET.SubElement(defs, "style")
-        style.text = self._css(active_complexity)
+        style.text = self._css(active_complexity, len(visible_nodes))
 
         marker = ET.SubElement(defs, "marker", {
             "id": "sw-arrow",
@@ -107,19 +123,16 @@ class Renderer:
 
         # Layer 3: nodes (on top)
         nodes_g = ET.SubElement(svg, "g", {"id": "sw-nodes", "class": "sw-layer"})
-        for node in dir.nodes:
-            if active_complexity and not self._is_visible(node.complexity, active_complexity):
-                continue
-            if node.id in layout.nodes:
-                self._render_node(nodes_g, node, layout.nodes[node.id])
+        for node in visible_nodes:
+            self._render_node(nodes_g, node, layout.nodes[node.id])
 
         ET.indent(svg, space="  ")
         svg_str = ET.tostring(svg, encoding="unicode", xml_declaration=False)
         return f'<?xml version="1.0" encoding="UTF-8"?>\n{svg_str}'
 
-    def _css(self, active_complexity: ComplexityLevel | None) -> str:
+    def _css(self, active_complexity: ComplexityLevel | None, node_count: int = 0) -> str:
         if active_complexity:
-            # Static export mode: hide elements above the active level
+            # Static export mode: hide elements above the active level (no animation)
             level_order = [ComplexityLevel.LOW, ComplexityLevel.MEDIUM, ComplexityLevel.HIGH]
             active_idx = level_order.index(active_complexity)
             rules = []
@@ -128,21 +141,54 @@ class Renderer:
                 rules.append(f"  .complexity-{level.value} {{ display: {display}; }}")
             return "\n" + "\n".join(rules) + "\n  "
         else:
-            # Interactive mode: JS can toggle complexity layers
-            return """
-  .sw-node rect { cursor: pointer; transition: filter 0.15s; }
-  .sw-node:hover rect { filter: brightness(0.95); }
-  .complexity-low { display: block; }
-  .complexity-medium { display: block; }
-  .complexity-high { display: none; }
-  .sw-group { opacity: 0.7; }
-  .sw-edge line, .sw-edge path { stroke: #666; stroke-width: 1.5; fill: none; }
-  .sw-edge text { font: 11px sans-serif; fill: #555; }
-  .sw-node text { font: 13px sans-serif; fill: #333; pointer-events: none; }
-  .sw-node .sw-node-label { font-weight: 600; }
-  .sw-node .sw-node-type { font: 10px monospace; fill: #888; }
-  .sw-group text { font: 12px sans-serif; fill: #666; font-weight: 600; }
-  """
+            # Entrance animation stagger: one delay rule per node, capped at 40
+            n = min(node_count, 40)
+            stagger = "\n".join(
+                f"  #sw-nodes > .sw-node:nth-child({i + 1}) {{ animation-delay: {i * 0.06:.2f}s; }}"
+                for i in range(n)
+            )
+            edge_delay = f"{n * 0.06 + 0.05:.2f}"
+
+            return f"""
+  /* complexity layers */
+  .complexity-low {{ display: block; }}
+  .complexity-medium {{ display: block; }}
+  .complexity-high {{ display: none; }}
+
+  /* base styles */
+  .sw-node rect {{ cursor: pointer; }}
+  .sw-node:hover rect {{ filter: brightness(0.93); transition: filter 0.15s; }}
+  .sw-group {{ opacity: 0.7; }}
+  .sw-edge line, .sw-edge path {{ stroke: #666; stroke-width: 1.5; fill: none; }}
+  .sw-edge text {{ font: 11px sans-serif; fill: #555; }}
+  .sw-node text {{ font: 13px sans-serif; fill: #333; pointer-events: none; }}
+  .sw-node .sw-node-label {{ font-weight: 600; }}
+  .sw-node .sw-node-type {{ font: 10px monospace; fill: #888; }}
+  .sw-group text {{ font: 12px sans-serif; fill: #666; font-weight: 600; }}
+
+  /* entrance animations */
+  .sw-node {{
+    animation: sw-node-in 0.25s ease both;
+  }}
+  #sw-edges > .sw-edge line,
+  #sw-edges > .sw-edge path {{
+    stroke-dasharray: 2000;
+    stroke-dashoffset: 2000;
+    animation: sw-edge-in 0.45s ease forwards;
+    animation-delay: {edge_delay}s;
+  }}
+
+  @keyframes sw-node-in {{
+    from {{ opacity: 0; transform: translateY(8px); }}
+    to   {{ opacity: 1; transform: translateY(0); }}
+  }}
+  @keyframes sw-edge-in {{
+    to {{ stroke-dashoffset: 0; }}
+  }}
+
+  /* per-node stagger delays */
+{stagger}
+"""
 
     def _is_visible(self, element_complexity: ComplexityLevel, active: ComplexityLevel) -> bool:
         order = {ComplexityLevel.LOW: 0, ComplexityLevel.MEDIUM: 1, ComplexityLevel.HIGH: 2}

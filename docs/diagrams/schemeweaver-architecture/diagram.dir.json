@@ -1,0 +1,170 @@
+{
+  "version": "1.0",
+  "meta": {
+    "title": "Scheme Weaver Components Overview",
+    "description": "Overview of the components within Scheme Weaver, an AI diagramming pipeline including a FastAPI server, core library, SVGKit library, Rust CLI, ARQ worker, and planned Nuxt web editor.",
+    "diagram_type": "architecture",
+    "author": "schemeweaver",
+    "version": "1.0"
+  },
+  "complexity_levels": [
+    "low",
+    "medium",
+    "high"
+  ],
+  "nodes": [
+    {
+      "id": "apis-server",
+      "label": "FastAPI Server (v1/generate & v1/update)",
+      "node_type": "service",
+      "complexity": "low",
+      "description": "A RESTful API server exposing endpoints for diagram generation and updates.",
+      "metadata": {},
+      "children": []
+    },
+    {
+      "id": "libs-core-pipeline",
+      "label": "Core Library - Pipeline Class",
+      "node_type": "generic",
+      "complexity": "low",
+      "description": "Sends prompts to LLM providers and converts responses into DIR JSON.",
+      "metadata": {},
+      "children": []
+    },
+    {
+      "id": "libs-core-renderer",
+      "label": "Core Library - Renderer",
+      "node_type": "generic",
+      "complexity": "medium",
+      "description": "Converts DIR JSON into an SVG using BFS topological layout engine.",
+      "metadata": {},
+      "children": []
+    },
+    {
+      "id": "llm-providers",
+      "label": "Pluggable LLM Providers",
+      "node_type": "generic",
+      "complexity": "high",
+      "description": "Providers for Anthropic Claude, OpenAI, and Ollama.",
+      "metadata": {},
+      "children": []
+    },
+    {
+      "id": "libs-svgkit",
+      "label": "SVGKit Library",
+      "node_type": "generic",
+      "complexity": "medium",
+      "description": "Validates ARIA labels and semantic node IDs in SVG output post-processing stage.",
+      "metadata": {},
+      "children": []
+    },
+    {
+      "id": "apps-cli",
+      "label": "Rust CLI",
+      "node_type": "service",
+      "complexity": "low",
+      "description": "A thin HTTP client over FastAPI server with generate and update subcommands as a single binary.",
+      "metadata": {},
+      "children": []
+    },
+    {
+      "id": "jobs-worker",
+      "label": "ARQ Async Worker (Redis-backed Job Queue)",
+      "node_type": "generic",
+      "complexity": "medium",
+      "description": "Provides asynchronous diagram generation via decoupling of long-running LLM calls from HTTP requests.",
+      "metadata": {},
+      "children": []
+    },
+    {
+      "id": "apps-web-editor",
+      "label": "Nuxt 4 Web Editor (planned)",
+      "node_type": "generic",
+      "complexity": "medium",
+      "description": "A planned web-based editor using Nuxt.js Framework for diagram creation and management.",
+      "metadata": {},
+      "children": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "api-to-core-pipeline",
+      "from_node": "apis-server",
+      "to_node": "libs-core-pipeline",
+      "label": "Diagram requests from API server to core pipeline",
+      "complexity": "low",
+      "style": "solid",
+      "direction": "forward"
+    },
+    {
+      "id": "llm-to-renderer",
+      "from_node": "llm-providers",
+      "to_node": "libs-core-pipeline",
+      "label": "LLM response feeding into DIR JSON creation",
+      "complexity": "high",
+      "style": "solid",
+      "direction": "forward"
+    },
+    {
+      "id": "dir-to-renderer",
+      "from_node": "libs-core-pipeline",
+      "to_node": "libs-core-renderer",
+      "label": "DIR JSON to renderer for SVG creation",
+      "complexity": "low",
+      "style": "solid",
+      "direction": "forward"
+    },
+    {
+      "id": "render-to-postprocess",
+      "from_node": "libs-core-renderer",
+      "to_node": "libs-svgkit",
+      "label": "SVG validation and node ID enforcement by SVGKit",
+      "complexity": "medium",
+      "style": "solid",
+      "direction": "forward"
+    },
+    {
+      "id": "cli-to-api",
+      "from_node": "apps-cli",
+      "to_node": "apis-server",
+      "label": "CLI requests to the FastAPI server endpoints",
+      "complexity": "low",
+      "style": "solid",
+      "direction": "forward"
+    },
+    {
+      "id": "worker-to-redis",
+      "from_node": "jobs-worker",
+      "to_node": "libs-core-renderer",
+      "label": "Async requests managed by ARQ worker feeding into renderer via Redis job queue",
+      "complexity": "medium",
+      "style": "dashed",
+      "direction": "forward"
+    }
+  ],
+  "groups": [
+    {
+      "id": "core-components-group",
+      "label": "Core Components of Scheme Weaver",
+      "complexity": "low",
+      "contains": [
+        "apis-server",
+        "libs-core-pipeline",
+        "libs-core-renderer",
+        "lib-svgkit",
+        "llm-providers"
+      ],
+      "metadata": {}
+    },
+    {
+      "id": "external-components-group",
+      "label": "External Components of Scheme Weaver",
+      "complexity": "medium",
+      "contains": [
+        "apps-cli",
+        "jobs-worker"
+      ],
+      "metadata": {}
+    }
+  ]
+}

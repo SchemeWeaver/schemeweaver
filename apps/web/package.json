@@ -2,5 +2,26 @@
   "name": "schemeweaver-web",
   "private": true,
   "version": "0.1.0",
-  "description": "Scheme Weaver web editor (Nuxt 4 + Vue 3)"
+  "description": "Scheme Weaver web editor (Nuxt 4 + Vue 3)",
+  "scripts": {
+    "dev": "nuxt dev --port 3000",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
+    "@nuxtjs/tailwindcss": "^6.12.2",
+    "@vue-flow/background": "^1.3.2",
+    "@vue-flow/controls": "^1.1.2",
+    "@vue-flow/core": "^1.42.1",
+    "@vue-flow/minimap": "^1.5.2",
+    "nuxt": "^3.15.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/dagre": "^0.7.3",
+    "typescript": "^5.7.3",
+    "vue-tsc": "^2.2.0"
+  }
 }
