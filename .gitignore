@@ -211,3 +211,4 @@ __marimo__/
 .idea/
 data/
 node_modules/
+.nuxt/

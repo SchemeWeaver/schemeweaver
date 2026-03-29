@@ -16,14 +16,19 @@ async function handleCopyMermaid(): Promise<void> {
 
 <template>
   <div v-if="dir" class="export-bar">
+    <span class="export-bar__label">Export</span>
     <button class="export-bar__btn" title="Download SVG" @click="exportSvg(svg, dir?.meta.title)">
       SVG
     </button>
-    <button class="export-bar__btn" title="Download Mermaid" @click="exportMermaid(mermaid, dir?.meta.title)">
+    <button class="export-bar__btn" title="Download Mermaid (.mmd)" @click="exportMermaid(mermaid, dir?.meta.title)">
       Mermaid
     </button>
-    <button class="export-bar__btn" title="Copy Mermaid to clipboard" @click="handleCopyMermaid">
-      {{ copied ? 'Copied!' : 'Copy MMD' }}
+    <button
+      :class="['export-bar__btn', { 'export-bar__btn--copied': copied }]"
+      title="Copy Mermaid to clipboard"
+      @click="handleCopyMermaid"
+    >
+      {{ copied ? '✓ Copied' : 'Copy MMD' }}
     </button>
     <button class="export-bar__btn" title="Download DIR JSON" @click="exportDir(dir!)">
       JSON
@@ -34,22 +39,42 @@ async function handleCopyMermaid(): Promise<void> {
 <style scoped>
 .export-bar {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 3px;
+}
+
+.export-bar__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+  white-space: nowrap;
 }
 
 .export-bar__btn {
-  padding: 4px 10px;
-  font: 12px sans-serif;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: #fff;
-  color: #374151;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border-chrome);
+  border-radius: var(--radius-sm);
+  background: var(--bg-chrome-raised);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
   white-space: nowrap;
 }
 
 .export-bar__btn:hover {
-  background: #f3f4f6;
+  background: var(--bg-chrome-hover);
+  color: var(--text-primary);
+  border-color: #3d5070;
+}
+
+.export-bar__btn--copied {
+  color: var(--success);
+  border-color: var(--success);
+  background: rgba(82, 183, 136, 0.1);
 }
 </style>

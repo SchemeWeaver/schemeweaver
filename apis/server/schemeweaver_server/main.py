@@ -1,7 +1,7 @@
 """Scheme Weaver FastAPI server."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import generate, health
+from .routes import generate, health, library
 
 app = FastAPI(
     title="Scheme Weaver API",
@@ -18,3 +18,4 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(generate.router, prefix="/v1")
+app.include_router(library.router, prefix="/v1")

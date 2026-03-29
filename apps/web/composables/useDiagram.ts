@@ -63,6 +63,14 @@ export function useDiagram() {
     error.value = null
   }
 
+  function loadSaved(res: GenerateResponse): void {
+    dir.value = res.dir
+    svg.value = res.svg
+    mermaid.value = res.mermaid
+    issues.value = res.issues
+    error.value = null
+  }
+
   return {
     dir: readonly(dir),
     svg: readonly(svg),
@@ -74,5 +82,6 @@ export function useDiagram() {
     generate,
     refine,
     reset,
+    loadSaved,
   }
 }

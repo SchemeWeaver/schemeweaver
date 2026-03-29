@@ -55,16 +55,18 @@ const complexityBadge: Record<ComplexityLevel, string> = {
   align-items: center;
   width: 100%;
   height: 100%;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1.5px solid var(--node-stroke, #aaaaaa);
   background: var(--node-fill, #f5f5f5);
   box-sizing: border-box;
-  transition: filter 0.15s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.15s, filter 0.15s;
   cursor: pointer;
 }
 
 .sw-base-node:hover {
-  filter: brightness(0.93);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+  filter: brightness(0.97);
 }
 
 .sw-base-node__inner {
@@ -74,13 +76,16 @@ const complexityBadge: Record<ComplexityLevel, string> = {
   justify-content: center;
   width: 100%;
   padding: 0 20px;
-  gap: 2px;
+  gap: 3px;
   overflow: hidden;
 }
 
 .sw-base-node__label {
-  font: 600 13px/1.2 sans-serif;
-  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1e293b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -88,8 +93,9 @@ const complexityBadge: Record<ComplexityLevel, string> = {
 }
 
 .sw-base-node__type {
-  font: 10px/1 monospace;
-  color: #888;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  color: #94a3b8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -98,19 +104,21 @@ const complexityBadge: Record<ComplexityLevel, string> = {
 
 .sw-base-node__badge {
   position: absolute;
-  top: 2px;
-  right: 4px;
-  font: 9px monospace;
-  color: #aaa;
+  top: 3px;
+  right: 5px;
+  font-size: 9px;
+  font-family: ui-monospace, monospace;
+  color: #cbd5e1;
   line-height: 1;
 }
 
-/* Override Vue Flow handle styles */
+/* Vue Flow handle dots */
 :deep(.vue-flow__handle) {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--node-stroke, #aaaaaa);
-  border: none;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px var(--node-stroke, #aaaaaa);
 }
 </style>

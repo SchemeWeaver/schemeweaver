@@ -4,6 +4,7 @@
  * Layout is computed once when the DIR changes.
  * Complexity filtering only toggles hidden/visible via a class — no re-layout.
  */
+import { MarkerType } from '@vue-flow/core'
 import type { Node as FlowNode, Edge as FlowEdge } from '@vue-flow/core'
 import type { DIR, ComplexityLevel } from '~/types/dir'
 import { useLayout } from './useLayout'
@@ -64,7 +65,7 @@ export function useFlowGraph(
         label: edge.label,
         animated: edge.style !== 'solid',
         type: 'smoothstep',
-        markerEnd: 'sw-arrow',
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#666' },
         class: `sw-edge-${edge.style}`,
         data: { style: edge.style, direction: edge.direction },
       } satisfies FlowEdge))

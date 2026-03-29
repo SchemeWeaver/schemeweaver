@@ -2,6 +2,7 @@
   "name": "schemeweaver-web",
   "private": true,
   "version": "0.1.0",
+  "type": "module",
   "description": "Scheme Weaver web editor (Nuxt 4 + Vue 3)",
   "scripts": {
     "dev": "nuxt dev --port 3000",

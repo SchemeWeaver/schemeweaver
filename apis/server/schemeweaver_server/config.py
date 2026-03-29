@@ -1,5 +1,9 @@
+from pathlib import Path
 from typing import Literal
 from pydantic_settings import BaseSettings
+
+# Repo root is three levels up from this file (apis/server/schemeweaver_server/config.py)
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -16,6 +20,9 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379"
     use_async_worker: bool = False
+
+    # Directory where test_generate.py saves diagram output
+    data_out_dir: Path = _REPO_ROOT / "data" / "out"
 
     class Config:
         env_file = ".env"

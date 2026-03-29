@@ -1,39 +1,97 @@
-/* Vue Flow canvas overrides */
-.vue-flow__container {
-  background: #f8f9fa;
+/* ─── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg-chrome:        #181f2e;
+  --bg-chrome-raised: #1e2840;
+  --bg-chrome-hover:  #2a3450;
+  --border-chrome:    #2e3d5c;
+
+  --text-primary:     #e2e8f0;
+  --text-muted:       #7a8ba8;
+  --text-subtle:      #4e6080;
+
+  --accent:           #5b8cd7;
+  --accent-hover:     #4a7bc6;
+  --accent-muted:     rgba(91, 140, 215, 0.18);
+
+  --canvas-bg:        #f5f7fb;
+  --canvas-border:    #e2e8f0;
+
+  --danger:           #e05252;
+  --warn:             #f0a33a;
+  --success:          #52b788;
+
+  --radius-sm:        4px;
+  --radius-md:        6px;
+  --radius-lg:        8px;
 }
 
+/* ─── Vue Flow layer stacking ──────────────────────────────────────────────── */
+/*
+ * Tailwind preflight sets `svg { display: block }` which collapses the edge
+ * SVG to its natural content height. Explicit z-indices restore correct order.
+ */
+.vue-flow__background  { z-index: 0; }
+.vue-flow__edges,
+.vue-flow__edge        { z-index: 1; }
+.vue-flow__transformationpane { z-index: 2; }
+.vue-flow__nodes       { z-index: 3; }
+.vue-flow__pane        { z-index: 4; }
+
+.vue-flow__edges svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* ─── Vue Flow canvas surface ──────────────────────────────────────────────── */
+.vue-flow__container {
+  background: var(--canvas-bg);
+}
+
+/* ─── Edge paths ───────────────────────────────────────────────────────────── */
+.vue-flow__edge-path,
+.vue-flow__connection-path {
+  stroke: #8da8c8;
+  stroke-width: 1.5;
+}
+
+/* Edge labels */
+.vue-flow__edge-label {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 2px 7px;
+  border-radius: 10px;
+  font: 11px/1.4 system-ui, sans-serif;
+  color: #4e6080;
+  border: 1px solid var(--canvas-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* ─── Nodes ────────────────────────────────────────────────────────────────── */
 .vue-flow__node {
   cursor: default;
 }
 
-/* Node type colors — mirror renderer.py NODE_COLORS */
-.sw-node-user      { --node-fill: #e8f4f8; --node-stroke: #5bc0de; }
-.sw-node-gateway   { --node-fill: #fff3cd; --node-stroke: #f0ad4e; }
-.sw-node-service   { --node-fill: #f0f4ff; --node-stroke: #6c8ebf; }
-.sw-node-database  { --node-fill: #d4edda; --node-stroke: #5cb85c; }
-.sw-node-queue     { --node-fill: #fde8e8; --node-stroke: #d9534f; }
-.sw-node-storage   { --node-fill: #e2d9f3; --node-stroke: #9b59b6; }
-.sw-node-generic   { --node-fill: #f5f5f5; --node-stroke: #aaaaaa; }
+/* Node type fill/stroke CSS vars — mirror renderer.py NODE_COLORS */
+.sw-node-user              { --node-fill: #e6f3f9; --node-stroke: #5bc0de; }
+.sw-node-gateway           { --node-fill: #fef6e4; --node-stroke: #e8a020; }
+.sw-node-service           { --node-fill: #eef2ff; --node-stroke: #5b8cd7; }
+.sw-node-database          { --node-fill: #e6f4ec; --node-stroke: #3da05a; }
+.sw-node-queue             { --node-fill: #fdecea; --node-stroke: #d94f4f; }
+.sw-node-storage           { --node-fill: #f0ebfa; --node-stroke: #8e55c4; }
+.sw-node-generic           { --node-fill: #f4f5f7; --node-stroke: #99a8bc; }
+.sw-node-aws\.api_gateway  { --node-fill: #fef6e4; --node-stroke: #e8a020; }
+.sw-node-aws\.rds          { --node-fill: #e6f4ec; --node-stroke: #3da05a; }
+.sw-node-aws\.s3           { --node-fill: #f0ebfa; --node-stroke: #8e55c4; }
+.sw-node-aws\.lambda       { --node-fill: #eef2ff; --node-stroke: #5b8cd7; }
+.sw-node-aws\.ec2          { --node-fill: #f4f5f7; --node-stroke: #99a8bc; }
+.sw-node-aws\.elasticache  { --node-fill: #fdecea; --node-stroke: #d94f4f; }
 
-/* aws.* variants */
-.sw-node-aws\.api_gateway { --node-fill: #fff3cd; --node-stroke: #f0ad4e; }
-.sw-node-aws\.rds         { --node-fill: #d4edda; --node-stroke: #5cb85c; }
-.sw-node-aws\.s3          { --node-fill: #e2d9f3; --node-stroke: #9b59b6; }
-.sw-node-aws\.lambda      { --node-fill: #f0f4ff; --node-stroke: #6c8ebf; }
-.sw-node-aws\.ec2         { --node-fill: #f5f5f5; --node-stroke: #aaaaaa; }
-.sw-node-aws\.elasticache { --node-fill: #fde8e8; --node-stroke: #d9534f; }
+/* ─── Complexity visibility ─────────────────────────────────────────────────── */
+.sw-hidden { display: none !important; }
 
-/* Complexity filter — hidden class toggled via JS */
-.sw-hidden {
-  display: none !important;
-}
-
-/* Scrollbar style for prompt bar */
-textarea::-webkit-scrollbar {
-  width: 6px;
-}
-textarea::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
+/* ─── Scrollbars (canvas + library sidebar) ─────────────────────────────────── */
+::-webkit-scrollbar              { width: 6px; height: 6px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: var(--border-chrome); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--text-subtle); }
