@@ -106,6 +106,7 @@ onMounted(fetchList)
             <span class="library__item-name">{{ entry.title }}</span>
             <span class="library__item-meta">
               {{ entry.nodes }} nodes · {{ entry.edges }} edges
+              <template v-if="entry.model"> · {{ entry.model.replace(/^claude-/, '').replace(/-\d{8}$/, '') }}</template>
               <span v-if="entry.issues.length" class="library__item-warn" title="Has validation issues">⚠</span>
             </span>
           </div>

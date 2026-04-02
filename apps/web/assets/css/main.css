@@ -25,53 +25,6 @@
   --radius-lg:        8px;
 }
 
-/* ─── Vue Flow layer stacking ──────────────────────────────────────────────── */
-/*
- * Tailwind preflight sets `svg { display: block }` which collapses the edge
- * SVG to its natural content height. Explicit z-indices restore correct order.
- */
-.vue-flow__background  { z-index: 0; }
-.vue-flow__edges,
-.vue-flow__edge        { z-index: 1; }
-.vue-flow__transformationpane { z-index: 2; }
-.vue-flow__nodes       { z-index: 3; }
-.vue-flow__pane        { z-index: 4; }
-
-.vue-flow__edges svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-/* ─── Vue Flow canvas surface ──────────────────────────────────────────────── */
-.vue-flow__container {
-  background: var(--canvas-bg);
-}
-
-/* ─── Edge paths ───────────────────────────────────────────────────────────── */
-.vue-flow__edge-path,
-.vue-flow__connection-path {
-  stroke: #8da8c8;
-  stroke-width: 1.5;
-}
-
-/* Edge labels */
-.vue-flow__edge-label {
-  background: rgba(255, 255, 255, 0.95);
-  padding: 2px 7px;
-  border-radius: 10px;
-  font: 11px/1.4 system-ui, sans-serif;
-  color: #4e6080;
-  border: 1px solid var(--canvas-border);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-
-/* ─── Nodes ────────────────────────────────────────────────────────────────── */
-.vue-flow__node {
-  cursor: default;
-}
-
 /* Node type fill/stroke CSS vars — mirror renderer.py NODE_COLORS */
 .sw-node-user              { --node-fill: #e6f3f9; --node-stroke: #5bc0de; }
 .sw-node-gateway           { --node-fill: #fef6e4; --node-stroke: #e8a020; }

@@ -38,6 +38,8 @@ export interface DiagramNode {
   complexity: ComplexityLevel
   group?: string
   children?: DiagramNode[]
+  x?: number
+  y?: number
 }
 
 export interface DiagramEdge {
@@ -71,4 +73,16 @@ export interface GenerateResponse {
   dir: DIR
   mermaid: string
   issues: string[]
+  model: string
+}
+
+export interface ModelInfo {
+  id: string
+  provider: string
+  accessible: boolean
+}
+
+export interface ModelsResponse {
+  default: string
+  models: ModelInfo[]
 }

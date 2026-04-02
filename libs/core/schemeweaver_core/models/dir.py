@@ -62,6 +62,9 @@ class DiagramNode(BaseModel):
     description: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     children: list["DiagramNode"] = Field(default_factory=list)
+    # Canvas position (set by frontend after user arranges nodes; None = auto-layout)
+    x: Optional[float] = None
+    y: Optional[float] = None
 
 
 class DiagramEdge(BaseModel):

@@ -20,7 +20,11 @@ setup:
 
 # Start all services (FastAPI server + ARQ worker)
 dev:
-    just dev-server & just dev-worker
+    Start-Process powershell -ArgumentList "-NoLogo -Command just dev-server"; just dev-worker
+
+# Start FastAPI server + Nuxt web editor together
+dev-full:
+    Start-Process powershell -ArgumentList "-NoLogo -Command just dev-server"; just dev-web
 
 # Start FastAPI server only
 dev-server:

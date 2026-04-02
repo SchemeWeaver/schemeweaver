@@ -101,19 +101,48 @@ Rules:
 
 
 def _normalize_edges(data: dict) -> dict:
-    """Normalize from/to aliases to from_node/to_node before Pydantic validation."""
+    """Normalize from/to aliases and coerce invalid enum fields on edges."""
     for edge in data.get("edges", []):
         if "from" in edge and "from_node" not in edge:
             edge["from_node"] = edge["from"]
         if "to" in edge and "to_node" not in edge:
             edge["to_node"] = edge["to"]
+        if edge.get("style") not in _VALID_EDGE_STYLES:
+            edge["style"] = "solid"
+        if edge.get("direction") not in _VALID_EDGE_DIRECTIONS:
+            edge["direction"] = "forward"
+        if edge.get("complexity") not in _VALID_COMPLEXITY:
+            edge["complexity"] = "low"
     return data
 
 
+def _normalize_meta(data: dict) -> dict:
+    """Coerce invalid diagram_type to 'generic'."""
+    meta = data.get("meta", {})
+    if meta.get("diagram_type") not in _VALID_DIAGRAM_TYPES:
+        meta["diagram_type"] = "generic"
+    return data
+
+
+_VALID_NODE_TYPES = {
+    "generic", "service", "database", "queue", "storage", "gateway", "user",
+    "aws.lambda", "aws.s3", "aws.rds", "aws.ec2", "aws.elasticache", "aws.api_gateway",
+}
+
+_VALID_DIAGRAM_TYPES = {"architecture", "flowchart", "erd", "sequence", "generic"}
+_VALID_COMPLEXITY = {"low", "medium", "high"}
+_VALID_EDGE_STYLES = {"solid", "dashed", "dotted"}
+_VALID_EDGE_DIRECTIONS = {"forward", "backward", "bidirectional"}
+
+
 def _normalize_node(node: dict) -> dict:
-    """Fill in missing required fields on a node (and its children recursively)."""
+    """Fill in missing or invalid fields on a node (and its children recursively)."""
     if "label" not in node:
         node["label"] = node.get("id", "unknown")
+    if node.get("node_type") not in _VALID_NODE_TYPES:
+        node["node_type"] = "generic"
+    if node.get("complexity") not in _VALID_COMPLEXITY:
+        node["complexity"] = "low"
     for child in node.get("children", []):
         _normalize_node(child)
     return node
@@ -139,7 +168,7 @@ class Pipeline:
             user_message = f"{prompt}\n\nAdditional context:\n{context}"
 
         raw = self.provider.complete(SYSTEM_PROMPT, user_message)
-        data = _normalize_nodes(_normalize_edges(json.loads(_extract_json(raw))))
+        data = _normalize_meta(_normalize_nodes(_normalize_edges(json.loads(_extract_json(raw)))))
         return DIR.model_validate(data)
 
     def refine(self, current_dir: DIR, feedback: str) -> DIR:
@@ -154,5 +183,5 @@ Refine it based on this feedback:
 Output the complete updated DIR JSON."""
 
         raw = self.provider.complete(SYSTEM_PROMPT, user_message)
-        data = _normalize_nodes(_normalize_edges(json.loads(_extract_json(raw))))
+        data = _normalize_meta(_normalize_nodes(_normalize_edges(json.loads(_extract_json(raw)))))
         return DIR.model_validate(data)

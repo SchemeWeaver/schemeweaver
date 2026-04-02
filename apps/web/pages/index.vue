@@ -2,16 +2,21 @@
 import AppShell from '~/components/AppShell.vue'
 import DiagramCanvas from '~/components/DiagramCanvas.vue'
 import DiagramLibrary from '~/components/DiagramLibrary.vue'
+import ShapePanel from '~/components/ShapePanel.vue'
 import PromptBar from '~/components/PromptBar.vue'
 import EmptyState from '~/components/EmptyState.vue'
 import IssuesBanner from '~/components/IssuesBanner.vue'
 import { useDiagram } from '~/composables/useDiagram'
 import { useLibrary } from '~/composables/useLibrary'
 
-const { dir, generate, loadSaved } = useDiagram()
-const { loadDiagram } = useLibrary()
+const { dir, saving, generate, loadSaved } = useDiagram()
+const { loadDiagram, fetchList } = useLibrary()
 
-const libraryOpen = ref(false)
+// Refresh the library list whenever a save completes
+watch(saving, (isSaving) => { if (!isSaving) fetchList() })
+
+const libraryOpen = ref(true)
+const shapesOpen = ref(false)
 
 function useExample(prompt: string): void {
   generate(prompt)
@@ -19,12 +24,12 @@ function useExample(prompt: string): void {
 
 async function handleLoad(slug: string): Promise<void> {
   const res = await loadDiagram(slug)
-  loadSaved(res)
+  loadSaved(res, slug)
 }
 </script>
 
 <template>
-  <AppShell v-model:library-open="libraryOpen">
+  <AppShell v-model:library-open="libraryOpen" v-model:shapes-open="shapesOpen">
     <IssuesBanner />
     <div class="editor">
       <Transition name="library-slide">
@@ -39,6 +44,10 @@ async function handleLoad(slug: string): Promise<void> {
         <EmptyState v-if="!dir" @use="useExample" />
         <DiagramCanvas v-else />
       </div>
+
+      <Transition name="shapes-slide">
+        <ShapePanel v-if="shapesOpen" @close="shapesOpen = false" />
+      </Transition>
     </div>
     <PromptBar />
   </AppShell>
@@ -58,13 +67,17 @@ async function handleLoad(slug: string): Promise<void> {
 }
 
 .library-slide-enter-active,
-.library-slide-leave-active {
+.library-slide-leave-active,
+.shapes-slide-enter-active,
+.shapes-slide-leave-active {
   transition: width 0.2s ease, opacity 0.2s ease;
   overflow: hidden;
 }
 
 .library-slide-enter-from,
-.library-slide-leave-to {
+.library-slide-leave-to,
+.shapes-slide-enter-from,
+.shapes-slide-leave-to {
   width: 0 !important;
   opacity: 0;
 }

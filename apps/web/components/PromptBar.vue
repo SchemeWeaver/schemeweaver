@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModelSelector from './ModelSelector.vue'
 import { useDiagram } from '~/composables/useDiagram'
 
 const { dir, loading, generate, refine } = useDiagram()
@@ -33,6 +34,8 @@ function onKeydown(e: KeyboardEvent): void {
       <div :class="['prompt-bar__mode', isUpdate ? 'prompt-bar__mode--update' : 'prompt-bar__mode--new']">
         {{ isUpdate ? 'Update' : 'New' }}
       </div>
+
+      <ModelSelector class="prompt-bar__model" hide-label />
 
       <textarea
         v-model="prompt"
@@ -175,6 +178,10 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.prompt-bar__model {
+  flex-shrink: 0;
+}
 
 .prompt-bar__hint {
   display: flex;

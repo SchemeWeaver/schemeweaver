@@ -2,7 +2,7 @@
  * Central state hub for the diagram editor.
  * Owns the current DIR, SVG, Mermaid, issues, and loading state.
  */
-import type { DIR, GenerateResponse, ComplexityLevel } from '~/types/dir'
+import type { DIR, GenerateResponse, ComplexityLevel, NodeType } from '~/types/dir'
 
 const dir = ref<DIR | null>(null)
 const svg = ref<string>('')
@@ -11,6 +11,10 @@ const issues = ref<string[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const complexity = ref<ComplexityLevel>('medium')
+const selectedModel = ref<string>('')
+const activeModel = ref<string>('')  // model that produced the current diagram
+const currentSlug = ref<string | null>(null)  // null = unsaved draft
+const saving = ref(false)
 
 export function useDiagram() {
   const config = useRuntimeConfig()
@@ -20,14 +24,17 @@ export function useDiagram() {
     loading.value = true
     error.value = null
     try {
+      const body: Record<string, unknown> = { prompt }
+      if (selectedModel.value) body.model = selectedModel.value
       const res = await $fetch<GenerateResponse>(`${apiBase}/v1/generate`, {
         method: 'POST',
-        body: { prompt },
+        body,
       })
       dir.value = res.dir
       svg.value = res.svg
       mermaid.value = res.mermaid
       issues.value = res.issues
+      activeModel.value = res.model ?? ''
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
     } finally {
@@ -40,19 +47,65 @@ export function useDiagram() {
     loading.value = true
     error.value = null
     try {
+      const body: Record<string, unknown> = { dir: dir.value, feedback }
+      if (selectedModel.value) body.model = selectedModel.value
       const res = await $fetch<GenerateResponse>(`${apiBase}/v1/update`, {
         method: 'POST',
-        body: { dir: dir.value, feedback },
+        body,
       })
       dir.value = res.dir
       svg.value = res.svg
       mermaid.value = res.mermaid
       issues.value = res.issues
+      activeModel.value = res.model ?? ''
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
     } finally {
       loading.value = false
     }
+  }
+
+  async function save(): Promise<void> {
+    if (!dir.value || !svg.value) return
+    saving.value = true
+    error.value = null
+    try {
+      const res = await $fetch<{ slug: string }>(`${apiBase}/v1/library`, {
+        method: 'POST',
+        body: {
+          slug: currentSlug.value ?? undefined,
+          dir: dir.value,
+          svg: svg.value,
+          mermaid: mermaid.value,
+          issues: issues.value,
+          model: activeModel.value,
+        },
+      })
+      currentSlug.value = res.slug
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
+    } finally {
+      saving.value = false
+    }
+  }
+
+  function addNode(nodeType: string, label: string): string | null {
+    if (!dir.value) return null
+    const id = `${nodeType.replace(/\./g, '-')}-${Date.now()}`
+    dir.value.nodes.push({
+      id,
+      label,
+      node_type: nodeType as NodeType,
+      complexity: 'low' as ComplexityLevel,
+      children: [],
+    })
+    return id
+  }
+
+  function updateNodePosition(id: string, x: number, y: number): void {
+    if (!dir.value) return
+    const node = dir.value.nodes.find(n => n.id === id)
+    if (node) { node.x = x; node.y = y }
   }
 
   function reset(): void {
@@ -61,14 +114,18 @@ export function useDiagram() {
     mermaid.value = ''
     issues.value = []
     error.value = null
+    activeModel.value = ''
+    currentSlug.value = null
   }
 
-  function loadSaved(res: GenerateResponse): void {
+  function loadSaved(res: GenerateResponse, slug: string): void {
     dir.value = res.dir
     svg.value = res.svg
     mermaid.value = res.mermaid
     issues.value = res.issues
     error.value = null
+    activeModel.value = res.model ?? ''
+    currentSlug.value = slug
   }
 
   return {
@@ -79,9 +136,16 @@ export function useDiagram() {
     loading: readonly(loading),
     error: readonly(error),
     complexity,
+    selectedModel,
+    activeModel: readonly(activeModel),
+    currentSlug: readonly(currentSlug),
+    saving: readonly(saving),
     generate,
     refine,
+    save,
     reset,
     loadSaved,
+    addNode,
+    updateNodePosition,
   }
 }

@@ -12,15 +12,17 @@ export interface DiagramSummary {
   groups: number
   elapsed_s: number
   issues: string[]
+  model: string
 }
+
+// Module-level state so all consumers share the same list
+const entries = ref<DiagramSummary[]>([])
+const loadingList = ref(false)
+const listError = ref<string | null>(null)
 
 export function useLibrary() {
   const config = useRuntimeConfig()
   const apiBase = config.public.apiBase as string
-
-  const entries = ref<DiagramSummary[]>([])
-  const loadingList = ref(false)
-  const listError = ref<string | null>(null)
 
   async function fetchList(): Promise<void> {
     loadingList.value = true

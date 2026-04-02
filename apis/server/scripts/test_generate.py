@@ -119,6 +119,8 @@ def run_case(
     prompt: str,
     complexity: ComplexityLevel | None,
     out_dir: Path,
+    provider: str = "",
+    model: str = "",
 ) -> dict:
     """Run one generation case. Returns a result summary dict."""
     out_path = out_dir / slug
@@ -181,6 +183,8 @@ def run_case(
             "groups": result["groups"],
             "complexity": result["complexity_counts"],
             "issues": issues,
+            "provider": provider,
+            "model": model,
         }
         (out_path / "summary.json").write_text(
             json.dumps(summary, indent=2), encoding="utf-8"
@@ -230,8 +234,10 @@ def run_case(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scheme Weaver generation test tool")
-    parser.add_argument("--provider", default="ollama", choices=["ollama", "anthropic", "openai"])
-    parser.add_argument("--model", default="qwen2.5:14b")
+    parser.add_argument("--provider", default="ollama", choices=["ollama", "anthropic", "openai"],
+                        help="LLM provider (default: ollama)")
+    parser.add_argument("--model", default="qwen2.5:14b",
+                        help="Model ID (default: qwen2.5:14b)")
     parser.add_argument("--base-url", default=None, help="Override provider base URL")
     parser.add_argument("--prompt", default=None, help="Single prompt to test")
     parser.add_argument("--slug", default=None, help="Output slug (default: derived from prompt)")
@@ -284,11 +290,19 @@ def main() -> None:
     print(f"  Out dir   : {out_dir}")
     print(f"  Complexity: {args.complexity or 'interactive (all levels)'}")
 
+    import os
+    if args.provider == "anthropic":
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    elif args.provider == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+    else:
+        api_key = "ollama"
+
     try:
         provider = make_provider(
             provider=args.provider,
             model=args.model,
-            api_key="ollama" if args.provider == "ollama" else "",
+            api_key=api_key,
             base_url=base_url,
         )
     except ValueError as e:
@@ -315,7 +329,7 @@ def main() -> None:
     # ── run ───────────────────────────────────────────────────────────────────
     results = []
     for case in cases:
-        res = run_case(pipeline, renderer, postprocessor, mermaid_exporter, case["slug"], case["prompt"], complexity, out_dir)
+        res = run_case(pipeline, renderer, postprocessor, mermaid_exporter, case["slug"], case["prompt"], complexity, out_dir, provider=args.provider, model=args.model)
         results.append(res)
 
     # ── summary ───────────────────────────────────────────────────────────────

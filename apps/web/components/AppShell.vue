@@ -3,14 +3,21 @@ import ComplexityFilter from './ComplexityFilter.vue'
 import ExportBar from './ExportBar.vue'
 import { useDiagram } from '~/composables/useDiagram'
 
-const props = defineProps<{ libraryOpen: boolean }>()
-const emit = defineEmits<{ 'update:libraryOpen': [value: boolean] }>()
+const props = defineProps<{ libraryOpen: boolean; shapesOpen: boolean }>()
+const emit = defineEmits<{ 'update:libraryOpen': [value: boolean]; 'update:shapesOpen': [value: boolean] }>()
 
-const { dir, loading, reset } = useDiagram()
+const { dir, loading, saving, currentSlug, save, reset } = useDiagram()
 
-function toggleLibrary(): void {
-  emit('update:libraryOpen', !props.libraryOpen)
+const saveLabel = ref('Save')
+
+async function handleSave(): Promise<void> {
+  await save()
+  saveLabel.value = 'Saved ✓'
+  setTimeout(() => { saveLabel.value = 'Save' }, 2000)
 }
+
+function toggleLibrary(): void { emit('update:libraryOpen', !props.libraryOpen) }
+function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
 </script>
 
 <template>
@@ -47,25 +54,59 @@ function toggleLibrary(): void {
 
       <!-- Right: controls -->
       <div class="app-shell__right">
+        <button
+          :class="['app-shell__icon-btn', { active: shapesOpen }]"
+          title="Toggle shape palette"
+          @click="toggleShapes"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+            <rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+        </button>
+
+        <div class="app-shell__divider" />
         <ComplexityFilter />
 
         <div class="app-shell__divider" />
 
         <ExportBar />
 
-        <div v-if="dir" class="app-shell__divider" />
+        <template v-if="dir">
+          <div class="app-shell__divider" />
 
-        <button
-          v-if="dir"
-          class="app-shell__icon-btn app-shell__new-btn"
-          title="New diagram"
-          @click="reset"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          New
-        </button>
+          <button
+            :class="['app-shell__save-btn', { 'app-shell__save-btn--saved': saveLabel !== 'Save' }]"
+            :disabled="saving"
+            :title="currentSlug ? `Overwrite '${currentSlug}'` : 'Save as new diagram'"
+            @click="handleSave"
+          >
+            <span v-if="saving" class="app-shell__spinner" />
+            <template v-else>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 2h6.5L10 3.5V10H2V2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                <rect x="3.5" y="6.5" width="5" height="3.5" rx="0.4" stroke="currentColor" stroke-width="1.2"/>
+                <rect x="3.5" y="2" width="3.5" height="2" rx="0.4" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+              {{ saveLabel }}
+            </template>
+          </button>
+
+          <div class="app-shell__divider" />
+
+          <button
+            class="app-shell__icon-btn app-shell__new-btn"
+            title="New diagram"
+            @click="reset"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            New
+          </button>
+        </template>
       </div>
     </header>
 
@@ -201,6 +242,49 @@ function toggleLibrary(): void {
   height: 20px;
   background: var(--border-chrome);
   flex-shrink: 0;
+}
+
+.app-shell__save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--bg-chrome-raised);
+  border: 1px solid var(--border-chrome);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.app-shell__save-btn:hover:not(:disabled) {
+  background: var(--bg-chrome-hover);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.app-shell__save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-shell__save-btn--saved {
+  color: var(--success);
+  border-color: var(--success);
+  background: rgba(82, 183, 136, 0.08);
+}
+
+.app-shell__spinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--border-chrome);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
 }
 
 /* ── Progress bar ────────────────────────────────────────────────────────── */
