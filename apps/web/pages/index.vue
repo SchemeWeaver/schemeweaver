@@ -1,24 +1,18 @@
 <script setup lang="ts">
 import AppShell from '~/components/AppShell.vue'
-import DiagramCanvas from '~/components/DiagramCanvas.vue'
 import DiagramLibrary from '~/components/DiagramLibrary.vue'
-import ShapePanel from '~/components/ShapePanel.vue'
+import WorkspaceLayout from '~/components/WorkspaceLayout.vue'
 import PromptBar from '~/components/PromptBar.vue'
-import EmptyState from '~/components/EmptyState.vue'
 import IssuesBanner from '~/components/IssuesBanner.vue'
 import { useSystem } from '~/composables/useSystem'
 
-const { dir, saving, generate, fetchList, loadSystem } = useSystem()
+const { saving, generate, fetchList, loadSystem } = useSystem()
 
 // Refresh the library list whenever a save completes
 watch(saving, (isSaving) => { if (!isSaving) fetchList() })
 
 const libraryOpen = ref(true)
 const shapesOpen = ref(false)
-
-function useExample(prompt: string): void {
-  generate(prompt)
-}
 
 async function handleLoad(slug: string): Promise<void> {
   await loadSystem(slug)
@@ -28,7 +22,7 @@ async function handleLoad(slug: string): Promise<void> {
 <template>
   <AppShell v-model:library-open="libraryOpen" v-model:shapes-open="shapesOpen">
     <IssuesBanner />
-    <div class="editor">
+    <div class="page">
       <Transition name="library-slide">
         <DiagramLibrary
           v-if="libraryOpen"
@@ -37,44 +31,36 @@ async function handleLoad(slug: string): Promise<void> {
         />
       </Transition>
 
-      <div class="editor__canvas">
-        <EmptyState v-if="!dir" @use="useExample" />
-        <DiagramCanvas v-else />
-      </div>
-
-      <Transition name="shapes-slide">
-        <ShapePanel v-if="shapesOpen" @close="shapesOpen = false" />
-      </Transition>
+      <WorkspaceLayout
+        v-model:shapes-open="shapesOpen"
+        class="page__workspace"
+        @use="generate"
+      />
     </div>
     <PromptBar />
   </AppShell>
 </template>
 
 <style scoped>
-.editor {
+.page {
   display: flex;
   flex: 1;
   overflow: hidden;
 }
 
-.editor__canvas {
+.page__workspace {
   flex: 1;
-  overflow: hidden;
-  position: relative;
+  min-width: 0;
 }
 
 .library-slide-enter-active,
-.library-slide-leave-active,
-.shapes-slide-enter-active,
-.shapes-slide-leave-active {
+.library-slide-leave-active {
   transition: width 0.2s ease, opacity 0.2s ease;
   overflow: hidden;
 }
 
 .library-slide-enter-from,
-.library-slide-leave-to,
-.shapes-slide-enter-from,
-.shapes-slide-leave-to {
+.library-slide-leave-to {
   width: 0 !important;
   opacity: 0;
 }

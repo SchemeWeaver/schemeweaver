@@ -2,7 +2,7 @@ name: Regenerate architecture diagram
 
 on:
   push:
-    branches: [main]
+    branches: [notmain] # disable until we are ready to use it
     paths:
       - 'libs/core/**'
       - 'apis/server/**'

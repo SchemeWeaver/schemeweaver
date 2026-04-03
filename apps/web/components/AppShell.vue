@@ -2,12 +2,15 @@
 import ExportBar from './ExportBar.vue'
 import { useSystem } from '~/composables/useSystem'
 import { useTool } from '~/composables/useTool'
+import { useWorkspace } from '~/composables/useWorkspace'
+import type { WorkspaceMode } from '~/composables/useWorkspace'
 
 const props = defineProps<{ libraryOpen: boolean; shapesOpen: boolean }>()
 const emit = defineEmits<{ 'update:libraryOpen': [value: boolean]; 'update:shapesOpen': [value: boolean] }>()
 
 const { currentSystem, dir, loading, saving, save, reset } = useSystem()
 const { tool } = useTool()
+const { mode, setMode } = useWorkspace()
 
 const saveLabel = ref('Save')
 
@@ -19,6 +22,17 @@ async function handleSave(): Promise<void> {
 
 function toggleLibrary(): void { emit('update:libraryOpen', !props.libraryOpen) }
 function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
+
+// Keyboard shortcuts: 1/2/3 for workspace modes
+function onGlobalKey(e: KeyboardEvent): void {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+  if (e.key === '1') setMode('canvas')
+  else if (e.key === '2') setMode('split')
+  else if (e.key === '3') setMode('text')
+}
+
+onMounted(() => document.addEventListener('keydown', onGlobalKey))
+onUnmounted(() => document.removeEventListener('keydown', onGlobalKey))
 </script>
 
 <template>
@@ -95,6 +109,40 @@ function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
 
       <!-- Right: controls -->
       <div class="app-shell__right">
+        <!-- Workspace mode switcher -->
+        <div class="app-shell__tool-group" role="toolbar" aria-label="Workspace mode">
+          <button
+            :class="['app-shell__tool-btn', { active: mode === 'canvas' }]"
+            title="Canvas mode — full diagram (1)"
+            @click="setMode('canvas')"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1.5" y="2" width="11" height="10" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+            </svg>
+          </button>
+          <button
+            :class="['app-shell__tool-btn', { active: mode === 'split' }]"
+            title="Split mode — prose + diagram (2)"
+            @click="setMode('split')"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1.5" y="2" width="11" height="10" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+              <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" stroke-width="1.3"/>
+            </svg>
+          </button>
+          <button
+            :class="['app-shell__tool-btn', { active: mode === 'text' }]"
+            title="Text mode — prose full width (3)"
+            @click="setMode('text')"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 4h10M2 7h10M2 10h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="app-shell__divider" />
+
         <button
           :class="['app-shell__icon-btn', { active: shapesOpen }]"
           title="Toggle shape palette"

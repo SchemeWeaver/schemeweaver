@@ -245,6 +245,25 @@ export function useSystem() {
     })
   }
 
+  // ── Prose ────────────────────────────────────────────────────────────────
+
+  async function saveProse(prose: string): Promise<void> {
+    if (!currentSystem.value) return
+    saving.value = true
+    error.value = null
+    try {
+      await $fetch(
+        `${apiBase}/v1/systems/${encodeURIComponent(currentSystem.value.slug)}/prose`,
+        { method: 'PATCH', body: { prose } },
+      )
+      currentSystem.value = { ...currentSystem.value, prose }
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
+    } finally {
+      saving.value = false
+    }
+  }
+
   // ── Misc ─────────────────────────────────────────────────────────────────
 
   function reset(): void {
@@ -289,6 +308,7 @@ export function useSystem() {
     generate,
     refine,
     save,
+    saveProse,
     reset,
     fetchList,
     loadSystem,
