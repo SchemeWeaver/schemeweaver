@@ -193,3 +193,119 @@ Output ONLY the updated prose text (no JSON, no markdown)."""
             "You are a technical writer. Rewrite the provided system description based on the feedback.",
             prompt,
         ).strip()
+
+    def view_to_prose(self, system: System, view_id: str) -> str:
+        """Generate a prose description directly from a view's DIR."""
+        import json as _json
+
+        view = next((v for v in system.views if v.id == view_id), None)
+        if view is None:
+            raise ValueError(f"View '{view_id}' not found")
+
+        dir_summary = _json.dumps({
+            "title": view.dir.meta.title,
+            "diagram_type": view.dir.meta.diagram_type.value,
+            "nodes": [
+                {"id": n.id, "label": n.label, "type": n.node_type.value, "description": n.description}
+                for n in view.dir.nodes
+            ],
+            "edges": [
+                {"from": e.from_node, "to": e.to_node, "label": e.label, "type": e.type if hasattr(e, "type") else e.style.value}
+                for e in view.dir.edges
+            ],
+            "groups": [
+                {"label": g.label, "contains": g.contains}
+                for g in view.dir.groups
+            ],
+        }, indent=2)
+
+        prompt = f"""System name: {system.name}
+View name: {view.name}
+
+Diagram structure:
+{dir_summary}
+
+Write a clear, concise prose description (3-6 sentences) of this diagram suitable for a technical audience.
+Cover what the system does, its main components, and key interactions shown in the diagram.
+Output ONLY the prose text."""
+
+        return self.provider.complete(
+            "You are a technical writer generating system documentation from a diagram structure.",
+            prompt,
+        ).strip()
+
+    def ontology_to_prose(self, system: System) -> str:
+        """Generate a prose description from the current ontology."""
+        import json as _json
+        ontology_summary = _json.dumps({
+            "entities": [
+                {
+                    "name": e.name,
+                    "type": e.type.value,
+                    "domain": e.domain,
+                    "description": e.description,
+                    "status": e.status.value,
+                }
+                for e in system.ontology.entities
+            ],
+            "relationships": [
+                {
+                    "from": next((e.name for e in system.ontology.entities if e.id == r.from_entity), r.from_entity),
+                    "type": r.type.value,
+                    "to": next((e.name for e in system.ontology.entities if e.id == r.to_entity), r.to_entity),
+                    "description": r.description,
+                }
+                for r in system.ontology.relationships
+            ],
+        }, indent=2)
+
+        prompt = f"""System name: {system.name}
+
+Ontology (structured):
+{ontology_summary}
+
+Write a clear, concise prose description (3-6 sentences) of this system suitable for a technical audience.
+Cover what the system does, its main components, and key interactions.
+Output ONLY the prose text."""
+
+        return self.provider.complete(
+            "You are a technical writer generating system documentation from structured data.",
+            prompt,
+        ).strip()
+
+    def prose_to_ontology(self, system: System) -> Ontology:
+        """Derive or update the ontology from the current prose description."""
+        import json as _json
+
+        existing = _json.dumps({
+            "entities": [
+                {"id": e.id, "name": e.name, "type": e.type.value, "domain": e.domain}
+                for e in system.ontology.entities
+            ],
+            "relationships": [
+                {"id": r.id, "from_entity": r.from_entity, "type": r.type.value, "to_entity": r.to_entity}
+                for r in system.ontology.relationships
+            ],
+        }, indent=2)
+
+        prompt = f"""Current prose description:
+{system.prose}
+
+Existing ontology (for reference — keep IDs stable where possible):
+{existing}
+
+Update the ontology to match the prose. Output ONLY a JSON object with this structure:
+{{
+  "entities": [...],
+  "relationships": [...]
+}}
+
+Same entity/relationship schema as the system ontology (id, name, type, description, domain, status, tags, from_entity, to_entity).
+Reuse existing IDs where the entity is the same. Add new entities for things mentioned in prose. Remove entities no longer relevant."""
+
+        raw = self.provider.complete(
+            "You are an architect extracting structured ontology from a system description. Output only valid JSON.",
+            prompt,
+        )
+        data = json.loads(_extract_json(raw))
+        return _parse_ontology({"ontology": data})

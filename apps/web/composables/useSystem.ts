@@ -139,6 +139,15 @@ export function useSystem() {
     }
   }
 
+  async function migrateLibrary(): Promise<{ migrated: string[]; skipped: string[] }> {
+    const res = await $fetch<{ migrated: string[]; skipped: string[] }>(
+      `${apiBase}/v1/systems/migrate-library`,
+      { method: 'POST' },
+    )
+    await fetchList()
+    return res
+  }
+
   async function loadSystem(slug: string): Promise<void> {
     loading.value = true
     error.value = null
@@ -245,6 +254,25 @@ export function useSystem() {
     })
   }
 
+  // ── Ontology ─────────────────────────────────────────────────────────────
+
+  async function saveOntology(ontology: import('~/types/system').Ontology): Promise<void> {
+    if (!currentSystem.value) return
+    saving.value = true
+    error.value = null
+    try {
+      await $fetch(
+        `${apiBase}/v1/systems/${encodeURIComponent(currentSystem.value.slug)}/ontology`,
+        { method: 'PATCH', body: { ontology } },
+      )
+      currentSystem.value = { ...currentSystem.value, ontology }
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
+    } finally {
+      saving.value = false
+    }
+  }
+
   // ── Prose ────────────────────────────────────────────────────────────────
 
   async function saveProse(prose: string): Promise<void> {
@@ -308,10 +336,12 @@ export function useSystem() {
     generate,
     refine,
     save,
+    saveOntology,
     saveProse,
     reset,
     fetchList,
     loadSystem,
+    migrateLibrary,
     setActiveView,
     syncViewFromOntology,
     addNode,

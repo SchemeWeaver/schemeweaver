@@ -700,19 +700,46 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
               class="sw-node-type"
             >{{ n.node_type }}</text>
 
-            <!-- Selection ring -->
-            <rect
-              v-if="selected.has(n.id)"
-              x="-3" y="-3"
-              :width="NODE_W + 6"
-              :height="NODE_H + 6"
-              rx="6"
-              fill="none"
-              stroke="var(--accent)"
-              stroke-width="2"
-              class="sw-node-sel"
-              pointer-events="none"
-            />
+            <!-- Shape-matched selection ring -->
+            <template v-if="selected.has(n.id)">
+              <!-- ellipse: user -->
+              <ellipse
+                v-if="nodeShapeData[n.id]?.kind === 'ellipse'"
+                cx="80" cy="30" rx="79" ry="29"
+                class="sw-sel-ring" pointer-events="none"
+              />
+              <!-- diamond: gateway -->
+              <path
+                v-else-if="nodeShapeData[n.id]?.kind === 'diamond'"
+                d="M 80 2 L 158 30 L 80 58 L 2 30 Z"
+                class="sw-sel-ring" pointer-events="none"
+              />
+              <!-- cylinder: database / storage -->
+              <template v-else-if="nodeShapeData[n.id]?.kind === 'cylinder'">
+                <line x1="2" y1="12" x2="2" y2="54" class="sw-sel-ring" pointer-events="none"/>
+                <line x1="158" y1="12" x2="158" y2="54" class="sw-sel-ring" pointer-events="none"/>
+                <path d="M 2 54 A 78 11 0 0 0 158 54" class="sw-sel-ring" pointer-events="none"/>
+                <path d="M 2 12 A 78 11 0 0 1 158 12" class="sw-sel-ring" pointer-events="none"/>
+              </template>
+              <!-- parallelogram: queue -->
+              <path
+                v-else-if="nodeShapeData[n.id]?.kind === 'parallelogram'"
+                d="M 14 2 L 158 2 L 146 58 L 2 58 Z"
+                class="sw-sel-ring" stroke-linejoin="round" pointer-events="none"
+              />
+              <!-- plain rect: generic / aws.ec2 -->
+              <rect
+                v-else-if="nodeShapeData[n.id]?.kind === 'rect'"
+                :width="NODE_W" :height="NODE_H" rx="3"
+                class="sw-sel-ring" pointer-events="none"
+              />
+              <!-- default: rounded rect (service etc.) -->
+              <rect
+                v-else
+                :width="NODE_W" :height="NODE_H" rx="8"
+                class="sw-sel-ring" pointer-events="none"
+              />
+            </template>
           </g>
         </g>
         <!-- ── Connect preview ───────────────────────────────────────────── -->
@@ -828,18 +855,33 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
   pointer-events: none;
 }
 
-/* ── Node selection ────────────────────────────────────────────────────── */
-.sw-node-sel {
-  animation: sw-sel-pop 0.14s ease-out;
+/* ── Node selection ring ───────────────────────────────────────────────── */
+.sw-sel-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  animation:
+    sw-sel-pop  0.12s ease-out,
+    sw-sel-glow 2s   ease-in-out 0.12s infinite;
 }
+
 @keyframes sw-sel-pop {
-  from { opacity: 0; stroke-width: 6; }
-  to   { opacity: 1; stroke-width: 2; }
+  from { opacity: 0; stroke-width: 7; }
+  to   { opacity: 1; stroke-width: 2.5; }
+}
+
+@keyframes sw-sel-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px var(--accent)); opacity: 0.85; }
+  50%      { filter: drop-shadow(0 0 8px var(--accent)); opacity: 1; }
 }
 
 /* ── Edge selection ────────────────────────────────────────────────────── */
 .sw-edge-line {
   transition: stroke 0.1s, stroke-width 0.1s;
+}
+
+.sw-edge--selected .sw-edge-line {
+  animation: sw-sel-glow 2s ease-in-out infinite;
 }
 
 /* ── Edges ─────────────────────────────────────────────────────────────── */

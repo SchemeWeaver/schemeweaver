@@ -219,6 +219,77 @@ async def generate_system(req: GenerateSystemRequest):
     return GenerateSystemResponse(slug=slug, system=json.loads(system.model_dump_json()))
 
 
+@router.post("/systems/migrate-library")
+def migrate_library():
+    """Wrap all diagrams in data/out/ as Systems in data/systems/.
+
+    Each existing diagram becomes a System with a single 'Overview' view.
+    Already-migrated slugs are skipped.
+    """
+    import uuid
+    from datetime import datetime, timezone
+    from schemeweaver_core.models.dir import DIR
+    from schemeweaver_core.models.system import (
+        DiagramType as SystemDiagramType,
+        Ontology as SysOntology,
+    )
+
+    out_dir = settings.data_out_dir
+    if not out_dir.exists():
+        return {"migrated": [], "skipped": []}
+
+    migrated: list[str] = []
+    skipped:  list[str] = []
+
+    for slug_dir in sorted(out_dir.iterdir(), key=lambda p: p.stat().st_mtime):
+        if not slug_dir.is_dir():
+            continue
+        dir_path     = slug_dir / "diagram.dir.json"
+        summary_path = slug_dir / "summary.json"
+        if not dir_path.exists():
+            continue
+
+        slug = slug_dir.name
+        if (_systems_dir() / slug).exists():
+            skipped.append(slug)
+            continue
+
+        try:
+            dir_data = DIR.model_validate_json(dir_path.read_text(encoding="utf-8"))
+            summary  = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
+            title    = dir_data.meta.title or slug
+            now      = datetime.now(timezone.utc)
+            view = View(
+                id="view-overview",
+                name="Overview",
+                description="Migrated from library",
+                diagram_type=SystemDiagramType.ARCHITECTURE,
+                scope=ViewScope(),
+                dir=dir_data,
+                created_at=now,
+                updated_at=now,
+            )
+            system = System(
+                id=str(uuid.uuid4()),
+                slug=slug,
+                name=title,
+                prose=f"Migrated diagram: {title}",
+                ontology=SysOntology(),
+                views=[view],
+                log=[],
+                created_at=now,
+                updated_at=now,
+            )
+            _save_system(system, slug)
+            migrated.append(slug)
+        except Exception as exc:
+            log.warning("migrate_library  slug=%s  error=%s", slug, exc)
+            skipped.append(slug)
+
+    log.info("migrate_library  migrated=%d skipped=%d", len(migrated), len(skipped))
+    return {"migrated": migrated, "skipped": skipped}
+
+
 @router.get("/systems/{slug}", response_model=dict)
 def get_system(slug: str):
     """Load a full System by slug."""
@@ -362,6 +433,73 @@ def append_log(slug: str, req: LogActionRequest):
     return {"entry_id": entry.id}
 
 
+class SyncModelRequest(BaseModel):
+    model: Optional[str] = None
+
+
+@router.post("/systems/{slug}/sync/view-to-prose")
+async def sync_view_to_prose(slug: str, req: SyncViewRequest):
+    """Generate prose from the active view's DIR (AI)."""
+    import asyncio
+
+    system = _load_system(slug)
+    if not any(v.id == req.view_id for v in system.views):
+        raise HTTPException(status_code=404, detail=f"View '{req.view_id}' not found")
+
+    loop = asyncio.get_event_loop()
+    try:
+        pipeline = _build_pipeline(req.model)
+        new_prose = await loop.run_in_executor(None, pipeline.view_to_prose, system, req.view_id)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("sync_view_to_prose  slug=%s  view=%s", slug, req.view_id)
+        raise HTTPException(status_code=500, detail="Sync failed — see server logs")
+
+    return {"prose": new_prose}
+
+
+@router.post("/systems/{slug}/sync/ontology-to-prose")
+async def sync_ontology_to_prose(slug: str, req: SyncModelRequest):
+    """Generate new prose from the current ontology (AI)."""
+    from datetime import datetime, timezone
+    import asyncio
+
+    system = _load_system(slug)
+    loop = asyncio.get_event_loop()
+    try:
+        pipeline = _build_pipeline(req.model)
+        new_prose = await loop.run_in_executor(None, pipeline.ontology_to_prose, system)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("sync_ontology_to_prose  slug=%s", slug)
+        raise HTTPException(status_code=500, detail="Sync failed — see server logs")
+
+    # Return the proposed prose without saving (caller decides to apply)
+    return {"prose": new_prose}
+
+
+@router.post("/systems/{slug}/sync/prose-to-ontology")
+async def sync_prose_to_ontology(slug: str, req: SyncModelRequest):
+    """Derive a new ontology from the current prose (AI)."""
+    import asyncio
+
+    system = _load_system(slug)
+    loop = asyncio.get_event_loop()
+    try:
+        pipeline = _build_pipeline(req.model)
+        new_ontology = await loop.run_in_executor(None, pipeline.prose_to_ontology, system)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("sync_prose_to_ontology  slug=%s", slug)
+        raise HTTPException(status_code=500, detail="Sync failed — see server logs")
+
+    # Return the proposed ontology without saving (caller decides to apply)
+    return {"ontology": json.loads(new_ontology.model_dump_json())}
+
+
 @router.post("/systems/{slug}/sync/ontology-to-view")
 async def sync_ontology_to_view(slug: str, req: SyncViewRequest):
     """Re-derive a view's DIR from the current ontology."""
@@ -387,3 +525,5 @@ async def sync_ontology_to_view(slug: str, req: SyncViewRequest):
 
     svg = renderer.render(new_dir)
     return {"svg": svg, "dir": json.loads(new_dir.model_dump_json())}
+
+

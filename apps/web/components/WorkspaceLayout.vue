@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ProseEditor from './ProseEditor.vue'
+import OntologyPanel from './OntologyPanel.vue'
 import ViewBar from './ViewBar.vue'
 import DiagramCanvas from './DiagramCanvas.vue'
 import EmptyState from './EmptyState.vue'
@@ -43,13 +44,7 @@ function useExample(prompt: string): void { emit('use', prompt) }
         <div class="workspace__tab-content">
           <ProseEditor v-if="leftTab === 'prose'" />
 
-          <div v-else-if="leftTab === 'ontology'" class="workspace__coming-soon">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" opacity="0.3">
-              <circle cx="14" cy="14" r="12" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M14 8v6l4 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <p>Ontology panel coming soon.</p>
-          </div>
+          <OntologyPanel v-else-if="leftTab === 'ontology'" />
 
           <div v-else-if="leftTab === 'log'" class="workspace__coming-soon">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none" opacity="0.3">

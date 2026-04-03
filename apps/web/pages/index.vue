@@ -2,6 +2,7 @@
 import AppShell from '~/components/AppShell.vue'
 import DiagramLibrary from '~/components/DiagramLibrary.vue'
 import WorkspaceLayout from '~/components/WorkspaceLayout.vue'
+import SyncBar from '~/components/SyncBar.vue'
 import PromptBar from '~/components/PromptBar.vue'
 import IssuesBanner from '~/components/IssuesBanner.vue'
 import { useSystem } from '~/composables/useSystem'
@@ -37,6 +38,7 @@ async function handleLoad(slug: string): Promise<void> {
         @use="generate"
       />
     </div>
+    <SyncBar />
     <PromptBar />
   </AppShell>
 </template>

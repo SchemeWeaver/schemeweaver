@@ -4,9 +4,26 @@ import { useSystem } from '~/composables/useSystem'
 const emit = defineEmits<{ close: [] }>()
 const props = defineProps<{ onLoad: (slug: string) => Promise<void> }>()
 
-const { systems, loadingList, listError, currentSystem, fetchList } = useSystem()
+const { systems, loadingList, listError, currentSystem, fetchList, migrateLibrary } = useSystem()
 
-const loadingSlug = ref<string | null>(null)
+const loadingSlug   = ref<string | null>(null)
+const migrating     = ref(false)
+const migrateResult = ref<string | null>(null)
+
+async function migrate(): Promise<void> {
+  migrating.value = true
+  migrateResult.value = null
+  try {
+    const res = await migrateLibrary()
+    migrateResult.value = res.migrated.length
+      ? `Migrated ${res.migrated.length} diagram(s).`
+      : 'Nothing new to migrate.'
+  } catch {
+    migrateResult.value = 'Migration failed.'
+  } finally {
+    migrating.value = false
+  }
+}
 
 async function select(slug: string): Promise<void> {
   loadingSlug.value = slug
@@ -71,6 +88,11 @@ onMounted(() => {
         </svg>
         <p>No saved systems yet.</p>
         <p>Generate one with the prompt bar below.</p>
+        <button class="library__migrate-btn" :disabled="migrating" @click="migrate">
+          <span v-if="migrating" class="library__item-spinner" />
+          <template v-else>Import from old library</template>
+        </button>
+        <span v-if="migrateResult" class="library__migrate-result">{{ migrateResult }}</span>
       </div>
 
       <!-- List -->
@@ -216,6 +238,35 @@ onMounted(() => {
 }
 
 .library__empty--error { color: var(--danger); }
+
+.library__migrate-btn {
+  margin-top: 4px;
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid var(--border-chrome);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.library__migrate-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.library__migrate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.library__migrate-result {
+  font-size: 11px;
+  color: var(--success);
+  margin-top: 4px;
+}
 
 /* List */
 .library__list {

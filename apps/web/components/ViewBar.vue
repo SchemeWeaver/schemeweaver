@@ -1,13 +1,23 @@
 <script setup lang="ts">
+import NewViewDialog from './NewViewDialog.vue'
 import { useSystem } from '~/composables/useSystem'
 
-const { currentSystem, activeViewId, activeView, loading, setActiveView, syncViewFromOntology } = useSystem()
+const { currentSystem, activeViewId, loading, setActiveView, syncViewFromOntology, loadSystem } = useSystem()
 
 const views = computed(() => currentSystem.value?.views ?? [])
+const showNewViewDialog = ref(false)
 
 function onViewChange(e: Event): void {
   const id = (e.target as HTMLSelectElement).value
   setActiveView(id)
+}
+
+async function onViewCreated(viewId: string): Promise<void> {
+  // Reload the system so the new view appears, then switch to it
+  if (currentSystem.value) {
+    await loadSystem(currentSystem.value.slug)
+    setActiveView(viewId)
+  }
 }
 </script>
 
@@ -46,8 +56,26 @@ function onViewChange(e: Event): void {
         </svg>
         Derive from ontology
       </button>
+
+      <button
+        class="view-bar__new-btn"
+        :disabled="loading"
+        title="Create a new scoped view"
+        @click="showNewViewDialog = true"
+      >
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+          <path d="M5.5 1v9M1 5.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        New view
+      </button>
     </div>
   </div>
+
+  <NewViewDialog
+    v-if="showNewViewDialog"
+    @close="showNewViewDialog = false"
+    @created="onViewCreated"
+  />
 </template>
 
 <style scoped>
@@ -125,6 +153,33 @@ function onViewChange(e: Event): void {
 }
 
 .view-bar__sync-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.view-bar__new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  background: transparent;
+  border: 1px solid var(--border-chrome);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.view-bar__new-btn:hover:not(:disabled) {
+  background: var(--bg-chrome-raised);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.view-bar__new-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
