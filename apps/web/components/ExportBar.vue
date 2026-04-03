@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { useDiagram } from '~/composables/useDiagram'
+import { useSystem } from '~/composables/useSystem'
 import { useExport } from '~/composables/useExport'
 
-const { dir, svg, mermaid } = useDiagram()
+const { dir, svg, mermaid } = useSystem()
 const { exportSvg, exportMermaid, exportDir, copyMermaid } = useExport()
 
 const root   = ref<HTMLElement>()

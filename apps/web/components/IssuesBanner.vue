@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useDiagram } from '~/composables/useDiagram'
+import { useSystem } from '~/composables/useSystem'
 
-const { issues, error } = useDiagram()
+const { issues, error } = useSystem()
 
 const visible = computed(() => issues.value.length > 0 || !!error.value)
 </script>

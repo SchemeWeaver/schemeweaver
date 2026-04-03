@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import ModelSelector from './ModelSelector.vue'
-import { useDiagram } from '~/composables/useDiagram'
+import { useSystem } from '~/composables/useSystem'
 
-const { dir, loading, generate, refine } = useDiagram()
+const { dir, loading, generate, refine } = useSystem()
 
 const prompt = ref('')
 const isUpdate = computed(() => !!dir.value)

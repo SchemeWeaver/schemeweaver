@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useDiagram } from '~/composables/useDiagram'
+import { useSystem } from '~/composables/useSystem'
 import { useTool } from '~/composables/useTool'
 import ContextMenu from '~/components/ContextMenu.vue'
 import type { CtxItem } from '~/components/ContextMenu.vue'
@@ -77,7 +77,7 @@ function autoLayout(d: DIR): Record<string, { x: number; y: number }> {
 }
 
 // ── Composable ─────────────────────────────────────────────────────────────
-const { dir, updateNodePosition, addNode, addEdge, deleteNode, deleteEdge, updateNode, updateEdge } = useDiagram()
+const { dir, updateNodePosition, addNode, addEdge, deleteNode, deleteEdge, updateNode, updateEdge } = useSystem()
 const { tool } = useTool()
 
 // ── Node positions (reactive, keyed by node id) ────────────────────────────

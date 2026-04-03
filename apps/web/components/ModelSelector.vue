@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { ModelInfo, ModelsResponse } from '~/types/dir'
-import { useDiagram } from '~/composables/useDiagram'
+import { useSystem } from '~/composables/useSystem'
 
 defineProps<{ hideLabel?: boolean }>()
 
-const { selectedModel } = useDiagram()
+const { selectedModel } = useSystem()
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase as string
 

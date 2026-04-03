@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Directory where test_generate.py saves diagram output
     data_out_dir: Path = _REPO_ROOT / "data" / "out"
 
+    # Directory where systems are stored
+    data_systems_dir: Path = _REPO_ROOT / "data" / "systems"
+
     # Path to the model registry JSON
     models_registry: Path = _REPO_ROOT / "config" / "models.json"
 

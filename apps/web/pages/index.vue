@@ -6,11 +6,9 @@ import ShapePanel from '~/components/ShapePanel.vue'
 import PromptBar from '~/components/PromptBar.vue'
 import EmptyState from '~/components/EmptyState.vue'
 import IssuesBanner from '~/components/IssuesBanner.vue'
-import { useDiagram } from '~/composables/useDiagram'
-import { useLibrary } from '~/composables/useLibrary'
+import { useSystem } from '~/composables/useSystem'
 
-const { dir, saving, generate, loadSaved } = useDiagram()
-const { loadDiagram, fetchList } = useLibrary()
+const { dir, saving, generate, fetchList, loadSystem } = useSystem()
 
 // Refresh the library list whenever a save completes
 watch(saving, (isSaving) => { if (!isSaving) fetchList() })
@@ -23,8 +21,7 @@ function useExample(prompt: string): void {
 }
 
 async function handleLoad(slug: string): Promise<void> {
-  const res = await loadDiagram(slug)
-  loadSaved(res, slug)
+  await loadSystem(slug)
 }
 </script>
 

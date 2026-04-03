@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { useLibrary } from '~/composables/useLibrary'
-import { useDiagram } from '~/composables/useDiagram'
+import { useSystem } from '~/composables/useSystem'
 
 const emit = defineEmits<{ close: [] }>()
 const props = defineProps<{ onLoad: (slug: string) => Promise<void> }>()
 
-const { entries, loadingList, listError, fetchList } = useLibrary()
-const { dir: currentDir } = useDiagram()
+const { systems, loadingList, listError, currentSystem, fetchList } = useSystem()
 
 const loadingSlug = ref<string | null>(null)
 
@@ -18,22 +16,6 @@ async function select(slug: string): Promise<void> {
   } finally {
     loadingSlug.value = null
   }
-}
-
-const TYPE_ICONS: Record<string, string> = {
-  architecture: '⬡',
-  sequence:     '⇄',
-  flowchart:    '◇',
-  er:           '⊞',
-  generic:      '○',
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  architecture: '#5b8cd7',
-  sequence:     '#52b788',
-  flowchart:    '#e8a020',
-  er:           '#8e55c4',
-  generic:      '#7a8ba8',
 }
 
 onMounted(() => {
@@ -83,35 +65,28 @@ onMounted(() => {
       </div>
 
       <!-- Empty -->
-      <div v-else-if="entries.length === 0" class="library__empty">
+      <div v-else-if="systems.length === 0" class="library__empty">
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity="0.3">
           <polygon points="16,3 29,10 29,22 16,29 3,22 3,10" stroke="currentColor" stroke-width="1.5" fill="none"/>
         </svg>
-        <p>No saved diagrams yet.</p>
-        <code>just test-local</code>
+        <p>No saved systems yet.</p>
+        <p>Generate one with the prompt bar below.</p>
       </div>
 
       <!-- List -->
       <ul v-else class="library__list">
         <li
-          v-for="entry in entries"
+          v-for="entry in systems"
           :key="entry.slug"
-          :class="['library__item', { active: currentDir?.meta.title === entry.title }]"
+          :class="['library__item', { active: currentSystem?.slug === entry.slug }]"
           @click="select(entry.slug)"
         >
-          <span
-            class="library__type-icon"
-            :style="{ color: TYPE_COLORS[entry.diagram_type] ?? '#7a8ba8' }"
-          >
-            {{ TYPE_ICONS[entry.diagram_type] ?? '○' }}
-          </span>
+          <span class="library__type-icon" style="color: #5b8cd7">⬡</span>
 
           <div class="library__item-info">
-            <span class="library__item-name">{{ entry.title }}</span>
+            <span class="library__item-name">{{ entry.name }}</span>
             <span class="library__item-meta">
-              {{ entry.nodes }} nodes · {{ entry.edges }} edges
-              <template v-if="entry.model"> · {{ entry.model.replace(/^claude-/, '').replace(/-\d{8}$/, '') }}</template>
-              <span v-if="entry.issues.length" class="library__item-warn" title="Has validation issues">⚠</span>
+              {{ entry.entity_count }} entities · {{ entry.view_count }} view{{ entry.view_count !== 1 ? 's' : '' }}
             </span>
           </div>
 

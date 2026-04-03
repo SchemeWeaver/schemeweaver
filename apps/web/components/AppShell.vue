@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import ExportBar from './ExportBar.vue'
-import { useDiagram } from '~/composables/useDiagram'
+import { useSystem } from '~/composables/useSystem'
 import { useTool } from '~/composables/useTool'
 
 const props = defineProps<{ libraryOpen: boolean; shapesOpen: boolean }>()
 const emit = defineEmits<{ 'update:libraryOpen': [value: boolean]; 'update:shapesOpen': [value: boolean] }>()
 
-const { dir, loading, saving, currentSlug, save, reset } = useDiagram()
+const { currentSystem, dir, loading, saving, save, reset } = useSystem()
 const { tool } = useTool()
 
 const saveLabel = ref('Save')
@@ -87,10 +87,10 @@ function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
         </div>
       </div>
 
-      <!-- Center: diagram title when active -->
-      <div v-if="dir" class="app-shell__diagram-title">
-        {{ dir.meta.title }}
-        <span class="app-shell__diagram-type">{{ dir.meta.diagram_type }}</span>
+      <!-- Center: system name when active -->
+      <div v-if="currentSystem" class="app-shell__diagram-title">
+        {{ currentSystem.name }}
+        <span class="app-shell__diagram-type">system</span>
       </div>
 
       <!-- Right: controls -->
@@ -112,13 +112,13 @@ function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
 
         <ExportBar />
 
-        <template v-if="dir">
+        <template v-if="currentSystem">
           <div class="app-shell__divider" />
 
           <button
             :class="['app-shell__save-btn', { 'app-shell__save-btn--saved': saveLabel !== 'Save' }]"
             :disabled="saving"
-            :title="currentSlug ? `Overwrite '${currentSlug}'` : 'Save as new diagram'"
+            :title="`Save '${currentSystem.name}'`"
             @click="handleSave"
           >
             <span v-if="saving" class="app-shell__spinner" />
