@@ -1,0 +1,13 @@
+graph LR
+  subgraph core-diagram-pipeline-components["Core Diagram Pipeline Components"]
+    apis-server["FastAPI Server"]
+    libs-core-pipeline-class["Core Pipeline Class"]
+    libs-core-renderer["Renderer"]
+  end
+  libs-svgkit["SVGKit Library"]
+  apps-cli-client["Rust CLI Client"]
+  jobs-worker-queue["ARQ Async Worker - Redis Job Queue"]
+  apis-server -->|"Request"| libs-core-pipeline-class
+  libs-core-renderer -->|"SVG Output"| libs-svgkit
+  apis-server <-.->|"HTTP Request/Response"| apps-cli-client
+  libs-core-pipeline-class -.->|"LLM Job Queue"| jobs-worker-queue

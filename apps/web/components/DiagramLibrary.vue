@@ -36,7 +36,11 @@ const TYPE_COLORS: Record<string, string> = {
   generic:      '#7a8ba8',
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  if (import.meta.client) {
+    fetchList()
+  }
+})
 </script>
 
 <template>

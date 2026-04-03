@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { useDiagram } from '~/composables/useDiagram'
+import { useTool } from '~/composables/useTool'
+import ContextMenu from '~/components/ContextMenu.vue'
+import type { CtxItem } from '~/components/ContextMenu.vue'
 import type { DiagramGroup, DiagramNode, DIR } from '~/types/dir'
 import { shapeKind, labelY, typeTextY, nodeColor } from '~/utils/nodeShapes'
 import type { ShapeKind } from '~/utils/nodeShapes'
@@ -74,14 +77,19 @@ function autoLayout(d: DIR): Record<string, { x: number; y: number }> {
 }
 
 // ── Composable ─────────────────────────────────────────────────────────────
-const { dir, complexity, updateNodePosition, addNode } = useDiagram()
+const { dir, updateNodePosition, addNode, addEdge, deleteNode, deleteEdge, updateNode, updateEdge } = useDiagram()
+const { tool } = useTool()
 
 // ── Node positions (reactive, keyed by node id) ────────────────────────────
 const pos = reactive<Record<string, { x: number; y: number }>>({})
 
+// ── Selection ──────────────────────────────────────────────────────────────
+const selected = reactive(new Set<string>())
+
 watch(
   dir,
   (d) => {
+    selected.clear()
     for (const k of Object.keys(pos)) delete pos[k]
     if (!d) return
     const computed = autoLayout(d)
@@ -96,27 +104,12 @@ watch(
   { immediate: true },
 )
 
-// ── Complexity helpers ─────────────────────────────────────────────────────
-const RANK = { low: 0, medium: 1, high: 2 } as const
-const maxRank = computed(() => RANK[complexity.value])
-
-const visibleNodes = computed(() => {
-  if (!dir.value) return []
-  return dir.value.nodes.filter(n => RANK[n.complexity] <= maxRank.value)
-})
-const visibleIds = computed(() => new Set(visibleNodes.value.map(n => n.id)))
-const visibleEdges = computed(() => {
-  if (!dir.value) return []
-  return dir.value.edges.filter(
-    e => RANK[e.complexity] <= maxRank.value &&
-         visibleIds.value.has(e.from_node) &&
-         visibleIds.value.has(e.to_node),
-  )
-})
-const visibleGroups = computed(() => {
-  if (!dir.value) return []
-  return dir.value.groups.filter(g => RANK[g.complexity] <= maxRank.value)
-})
+const visibleNodes  = computed(() => dir.value?.nodes  ?? [])
+const visibleIds    = computed(() => new Set(visibleNodes.value.map(n => n.id)))
+const visibleEdges  = computed(() => (dir.value?.edges ?? []).filter(
+  e => visibleIds.value.has(e.from_node) && visibleIds.value.has(e.to_node),
+))
+const visibleGroups = computed(() => dir.value?.groups ?? [])
 
 // ── Canvas bounds ──────────────────────────────────────────────────────────
 const canvasW = computed(() => {
@@ -201,6 +194,30 @@ const nodeShapeData = computed(() => {
   return m
 })
 
+// ── Lasso ──────────────────────────────────────────────────────────────────
+const lasso = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
+
+// ── Connect ────────────────────────────────────────────────────────────────
+const connectFrom = ref<string | null>(null)
+const connectPreview = ref<{ x: number; y: number } | null>(null)
+
+watch(tool, () => {
+  lasso.value = null
+  connectFrom.value = null
+  connectPreview.value = null
+})
+
+// ── Selection helpers ──────────────────────────────────────────────────────
+function handleSelect(id: string, additive: boolean) {
+  if (additive) {
+    if (selected.has(id)) selected.delete(id)
+    else selected.add(id)
+  } else {
+    selected.clear()
+    selected.add(id)
+  }
+}
+
 // ── Pan / zoom ─────────────────────────────────────────────────────────────
 const container  = ref<HTMLDivElement>()
 const panX       = ref(0)
@@ -238,6 +255,7 @@ function fitView() {
 
 // ── Drag ───────────────────────────────────────────────────────────────────
 const drag = ref<{ id: string; offX: number; offY: number } | null>(null)
+let _pdClient = { x: 0, y: 0 }  // pointerdown client coords, used to detect click vs drag
 
 function toSvg(cx: number, cy: number) {
   const r = container.value!.getBoundingClientRect()
@@ -246,6 +264,22 @@ function toSvg(cx: number, cy: number) {
 
 function onNodePointerDown(e: PointerEvent, id: string) {
   e.stopPropagation()
+  _pdClient = { x: e.clientX, y: e.clientY }
+
+  if (tool.value === 'connect') {
+    if (!connectFrom.value) {
+      connectFrom.value = id
+    } else if (connectFrom.value !== id) {
+      addEdge(connectFrom.value, id)
+      connectFrom.value = null
+      connectPreview.value = null
+    } else {
+      connectFrom.value = null
+      connectPreview.value = null
+    }
+    return
+  }
+
   const p = pos[id]; if (!p) return
   const sv = toSvg(e.clientX, e.clientY)
   drag.value = { id, offX: sv.x - p.x, offY: sv.y - p.y }
@@ -254,11 +288,29 @@ function onNodePointerDown(e: PointerEvent, id: string) {
 
 function onCanvasPointerDown(e: PointerEvent) {
   if (e.button !== 0 || drag.value) return
-  isPanning.value = true
-  panStart.value = { x: e.clientX - panX.value, y: e.clientY - panY.value }
+  _pdClient = { x: e.clientX, y: e.clientY }
+
+  if (tool.value === 'lasso') {
+    const sv = toSvg(e.clientX, e.clientY)
+    lasso.value = { x1: sv.x, y1: sv.y, x2: sv.x, y2: sv.y }
+  } else if (tool.value === 'connect') {
+    connectFrom.value = null
+    connectPreview.value = null
+  } else {
+    isPanning.value = true
+    panStart.value = { x: e.clientX - panX.value, y: e.clientY - panY.value }
+  }
 }
 
 function onPointerMove(e: PointerEvent) {
+  if (tool.value === 'connect' && connectFrom.value) {
+    connectPreview.value = toSvg(e.clientX, e.clientY)
+  }
+  if (lasso.value) {
+    const sv = toSvg(e.clientX, e.clientY)
+    lasso.value = { ...lasso.value, x2: sv.x, y2: sv.y }
+    return
+  }
   if (drag.value) {
     const sv = toSvg(e.clientX, e.clientY)
     pos[drag.value.id] = { x: Math.max(0, sv.x - drag.value.offX), y: Math.max(0, sv.y - drag.value.offY) }
@@ -270,11 +322,35 @@ function onPointerMove(e: PointerEvent) {
   }
 }
 
-function onPointerUp() {
+function onPointerUp(e: PointerEvent) {
+  const moved = Math.hypot(e.clientX - _pdClient.x, e.clientY - _pdClient.y) > 4
+
+  if (lasso.value) {
+    if (moved) {
+      const { x1, y1, x2, y2 } = lasso.value
+      const minX = Math.min(x1, x2), maxX = Math.max(x1, x2)
+      const minY = Math.min(y1, y2), maxY = Math.max(y1, y2)
+      if (!e.ctrlKey && !e.metaKey) selected.clear()
+      for (const n of visibleNodes.value) {
+        const p = pos[n.id]; if (!p) continue
+        if (p.x < maxX && p.x + NODE_W > minX && p.y < maxY && p.y + NODE_H > minY)
+          selected.add(n.id)
+      }
+    }
+    lasso.value = null
+    return
+  }
+
   if (drag.value) {
-    const p = pos[drag.value.id]
-    updateNodePosition(drag.value.id, p.x, p.y)
+    if (moved) {
+      const p = pos[drag.value.id]
+      updateNodePosition(drag.value.id, p.x, p.y)
+    } else {
+      handleSelect(drag.value.id, e.ctrlKey || e.metaKey)
+    }
     drag.value = null
+  } else if (isPanning.value && !moved) {
+    selected.clear()
   }
   isPanning.value = false
 }
@@ -311,8 +387,100 @@ function onDrop(e: DragEvent) {
   if (id) pos[id] = { x: Math.max(0, sv.x - NODE_W / 2), y: Math.max(0, sv.y - NODE_H / 2) }
 }
 
-onMounted(() => { container.value?.addEventListener('wheel', onWheel, { passive: false }) })
-onUnmounted(() => { container.value?.removeEventListener('wheel', onWheel) })
+// ── Context menu ───────────────────────────────────────────────────────────
+const ctxMenu = ref<{ x: number; y: number; type: 'node' | 'edge' | 'canvas'; id?: string } | null>(null)
+
+function openCtxNode(e: MouseEvent, id: string) {
+  ctxMenu.value = { x: e.clientX, y: e.clientY, type: 'node', id }
+}
+function openCtxEdge(e: MouseEvent, id: string) {
+  ctxMenu.value = { x: e.clientX, y: e.clientY, type: 'edge', id }
+}
+function openCtxCanvas(e: MouseEvent) {
+  ctxMenu.value = { x: e.clientX, y: e.clientY, type: 'canvas' }
+}
+
+function duplicateNode(id: string) {
+  const node = dir.value?.nodes.find(n => n.id === id)
+  const p = pos[id]
+  if (!node || !p) return
+  const newId = addNode(node.node_type, node.label)
+  if (!newId) return
+  updateNode(newId, { description: node.description })
+  pos[newId] = { x: p.x + 24, y: p.y + 24 }
+}
+
+function resetLayout() {
+  if (!dir.value) return
+  const computed = autoLayout(dir.value)
+  for (const [id, p] of Object.entries(computed)) {
+    pos[id] = p
+    updateNodePosition(id, p.x, p.y)
+  }
+  nextTick(fitView)
+}
+
+const ctxMenuItems = computed((): CtxItem[] => {
+  const ctx = ctxMenu.value
+  if (!ctx) return []
+
+  if (ctx.type === 'node' && ctx.id) {
+    const node = dir.value?.nodes.find(n => n.id === ctx.id)
+    if (!node) return []
+    return [
+      { label: 'Duplicate', action: () => duplicateNode(ctx.id!) },
+      { label: 'Delete node', danger: true, action: () => { deleteNode(ctx.id!); selected.delete(ctx.id!) } },
+    ]
+  }
+
+  if (ctx.type === 'edge' && ctx.id) {
+    const edge = dir.value?.edges.find(e => e.id === ctx.id)
+    if (!edge) return []
+    return [
+      { label: 'Reverse direction', action: () => updateEdge(ctx.id!, { direction: edge.direction === 'backward' ? 'forward' : 'backward' }) },
+      { label: 'Delete edge', danger: true, action: () => deleteEdge(ctx.id!) },
+      { divider: true },
+      { label: 'Style', subtle: true },
+      { label: 'Solid',  checked: edge.style === 'solid',  action: () => updateEdge(ctx.id!, { style: 'solid' }) },
+      { label: 'Dashed', checked: edge.style === 'dashed', action: () => updateEdge(ctx.id!, { style: 'dashed' }) },
+      { label: 'Dotted', checked: edge.style === 'dotted', action: () => updateEdge(ctx.id!, { style: 'dotted' }) },
+      { divider: true },
+      { label: 'Direction', subtle: true },
+      { label: '→ Forward',      checked: edge.direction === 'forward',       action: () => updateEdge(ctx.id!, { direction: 'forward' }) },
+      { label: '← Backward',     checked: edge.direction === 'backward',      action: () => updateEdge(ctx.id!, { direction: 'backward' }) },
+      { label: '↔ Both ways',    checked: edge.direction === 'bidirectional', action: () => updateEdge(ctx.id!, { direction: 'bidirectional' }) },
+    ]
+  }
+
+  // canvas
+  return [
+    { label: 'Fit view',    action: fitView },
+    { label: 'Select all',  action: () => { for (const n of visibleNodes.value) selected.add(n.id) } },
+    { divider: true },
+    { label: 'Reset layout', action: resetLayout },
+  ]
+})
+
+// ── Keyboard shortcuts ──────────────────────────────────────────────────────
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    if (ctxMenu.value) { ctxMenu.value = null; return }
+    connectFrom.value = null; connectPreview.value = null
+    lasso.value = null; selected.clear()
+  }
+  if (e.key === 'g' && !e.ctrlKey && !e.metaKey) tool.value = 'grab'
+  if (e.key === 'l' && !e.ctrlKey && !e.metaKey) tool.value = 'lasso'
+  if (e.key === 'c' && !e.ctrlKey && !e.metaKey) tool.value = 'connect'
+}
+
+onMounted(() => {
+  container.value?.addEventListener('wheel', onWheel, { passive: false })
+  window.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => {
+  container.value?.removeEventListener('wheel', onWheel)
+  window.removeEventListener('keydown', onKeyDown)
+})
 
 // ── Viewport style ─────────────────────────────────────────────────────────
 const vpStyle = computed(() => ({
@@ -327,7 +495,12 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
 <template>
   <div
     ref="container"
-    :class="['diagram-canvas', { 'diagram-canvas--panning': isPanning && !drag, 'diagram-canvas--drop': isDragOver }]"
+    :class="['diagram-canvas', {
+      'diagram-canvas--panning': isPanning && !drag,
+      'diagram-canvas--drop': isDragOver,
+      'diagram-canvas--lasso': tool === 'lasso',
+      'diagram-canvas--connect': tool === 'connect',
+    }]"
     @pointerdown="onCanvasPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -336,6 +509,7 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
     @dragleave="onDragLeave"
     @dragover="onDragOver"
     @drop="onDrop"
+    @contextmenu.prevent="openCtxCanvas"
   >
     <div class="diagram-canvas__viewport" :style="vpStyle">
       <svg
@@ -350,6 +524,12 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
           </marker>
           <marker id="sw-arr-rev" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto-start-reverse">
             <polygon points="0 0, 10 3.5, 0 7" fill="#888" />
+          </marker>
+          <marker id="sw-arr-sel" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent)" />
+          </marker>
+          <marker id="sw-arr-rev-sel" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto-start-reverse">
+            <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent)" />
           </marker>
         </defs>
 
@@ -379,15 +559,27 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
 
         <!-- ── Edges ─────────────────────────────────────────────────────── -->
         <g id="sw-edges">
-          <g v-for="e in visibleEdges" :key="e.id">
+          <g
+            v-for="e in visibleEdges"
+            :key="e.id"
+            :class="['sw-edge', { 'sw-edge--selected': selected.has(e.id) }]"
+            style="cursor: pointer"
+            @pointerdown.stop="_pdClient = { x: $event.clientX, y: $event.clientY }"
+            @click.stop="handleSelect(e.id, $event.ctrlKey || $event.metaKey)"
+            @contextmenu.prevent.stop="openCtxEdge($event, e.id)"
+          >
+            <!-- Wide invisible hit area -->
+            <path :d="edgePaths[e.id]" fill="none" stroke="transparent" stroke-width="12" />
+            <!-- Visible stroke -->
             <path
+              class="sw-edge-line"
               :d="edgePaths[e.id]"
               fill="none"
-              stroke="#8da8c8"
-              stroke-width="1.5"
+              :stroke="selected.has(e.id) ? 'var(--accent)' : '#8da8c8'"
+              :stroke-width="selected.has(e.id) ? 2.5 : 1.5"
               :stroke-dasharray="DASH[e.style]"
-              :marker-end="e.direction !== 'backward' ? 'url(#sw-arr)' : undefined"
-              :marker-start="e.direction === 'bidirectional' || e.direction === 'backward' ? 'url(#sw-arr-rev)' : undefined"
+              :marker-end="e.direction !== 'backward' ? (selected.has(e.id) ? 'url(#sw-arr-sel)' : 'url(#sw-arr)') : undefined"
+              :marker-start="e.direction === 'bidirectional' || e.direction === 'backward' ? (selected.has(e.id) ? 'url(#sw-arr-rev-sel)' : 'url(#sw-arr-rev)') : undefined"
             />
             <template v-if="e.label && edgeMids[e.id]">
               <rect
@@ -414,9 +606,14 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
           <g
             v-for="n in visibleNodes"
             :key="n.id"
-            :class="['sw-node', { 'sw-node--dragging': drag?.id === n.id }]"
+            :class="['sw-node', {
+              'sw-node--dragging': drag?.id === n.id,
+              'sw-node--selected': selected.has(n.id),
+              'sw-node--connect-source': connectFrom === n.id,
+            }]"
             :transform="pos[n.id] ? `translate(${pos[n.id].x}, ${pos[n.id].y})` : ''"
             @pointerdown.stop="onNodePointerDown($event, n.id)"
+            @contextmenu.prevent.stop="openCtxNode($event, n.id)"
           >
             <title>{{ n.label }}{{ n.description ? ` — ${n.description}` : '' }}</title>
 
@@ -502,10 +699,61 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
               text-anchor="middle"
               class="sw-node-type"
             >{{ n.node_type }}</text>
+
+            <!-- Selection ring -->
+            <rect
+              v-if="selected.has(n.id)"
+              x="-3" y="-3"
+              :width="NODE_W + 6"
+              :height="NODE_H + 6"
+              rx="6"
+              fill="none"
+              stroke="var(--accent)"
+              stroke-width="2"
+              class="sw-node-sel"
+              pointer-events="none"
+            />
           </g>
         </g>
+        <!-- ── Connect preview ───────────────────────────────────────────── -->
+        <line
+          v-if="connectFrom && connectPreview && pos[connectFrom]"
+          :x1="pos[connectFrom].x + NODE_W / 2"
+          :y1="pos[connectFrom].y + NODE_H / 2"
+          :x2="connectPreview.x"
+          :y2="connectPreview.y"
+          stroke="var(--accent)"
+          stroke-width="1.5"
+          stroke-dasharray="5 3"
+          pointer-events="none"
+        />
+
+        <!-- ── Lasso rect ─────────────────────────────────────────────────── -->
+        <rect
+          v-if="lasso"
+          :x="Math.min(lasso.x1, lasso.x2)"
+          :y="Math.min(lasso.y1, lasso.y2)"
+          :width="Math.abs(lasso.x2 - lasso.x1)"
+          :height="Math.abs(lasso.y2 - lasso.y1)"
+          fill="rgba(108, 142, 191, 0.08)"
+          stroke="var(--accent)"
+          stroke-width="1"
+          stroke-dasharray="5 3"
+          pointer-events="none"
+        />
       </svg>
     </div>
+
+    <!-- ── Context menu ──────────────────────────────────────────────────── -->
+    <Transition name="ctx">
+      <ContextMenu
+        v-if="ctxMenu"
+        :x="ctxMenu.x"
+        :y="ctxMenu.y"
+        :items="ctxMenuItems"
+        @close="ctxMenu = null"
+      />
+    </Transition>
 
     <!-- ── Controls ──────────────────────────────────────────────────────── -->
     <div class="diagram-canvas__controls">
@@ -540,6 +788,9 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
 }
 .diagram-canvas--panning { cursor: grabbing; }
 .diagram-canvas--drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
+.diagram-canvas--lasso { cursor: crosshair; }
+.diagram-canvas--connect { cursor: crosshair; }
+.diagram-canvas--connect .sw-node { cursor: pointer; }
 
 .diagram-canvas__viewport {
   position: absolute;
@@ -560,6 +811,12 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
 .sw-node--dragging .sw-node-shape {
   filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.2));
 }
+.sw-node--connect-source .sw-node-shape {
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+.diagram-canvas--connect .sw-node:hover .sw-node-shape {
+  filter: brightness(0.9) drop-shadow(0 0 4px var(--accent));
+}
 .sw-node-label {
   font: 600 13px system-ui, sans-serif;
   fill: #1e293b;
@@ -569,6 +826,20 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
   font: 10px monospace;
   fill: #8898aa;
   pointer-events: none;
+}
+
+/* ── Node selection ────────────────────────────────────────────────────── */
+.sw-node-sel {
+  animation: sw-sel-pop 0.14s ease-out;
+}
+@keyframes sw-sel-pop {
+  from { opacity: 0; stroke-width: 6; }
+  to   { opacity: 1; stroke-width: 2; }
+}
+
+/* ── Edge selection ────────────────────────────────────────────────────── */
+.sw-edge-line {
+  transition: stroke 0.1s, stroke-width 0.1s;
 }
 
 /* ── Edges ─────────────────────────────────────────────────────────────── */
@@ -611,5 +882,18 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
 .diagram-canvas__ctrl-btn:hover {
   background: var(--canvas-bg);
   color: #1e293b;
+}
+
+/* ── Context menu transition ─────────────────────────────────────────────── */
+.ctx-enter-active {
+  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+}
+.ctx-leave-active {
+  transition: opacity 0.08s ease-in, transform 0.08s ease-in;
+}
+.ctx-enter-from,
+.ctx-leave-to {
+  opacity: 0;
+  transform: scale(0.94) translateY(-4px);
 }
 </style>

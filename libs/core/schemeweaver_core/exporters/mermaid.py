@@ -1,9 +1,6 @@
 """DIR → Mermaid flowchart serializer."""
 import re
-from ..models.dir import DIR, DiagramNode, ComplexityLevel, NodeType
-
-# Complexity ordering for filtering
-_COMPLEXITY_ORDER = {ComplexityLevel.LOW: 0, ComplexityLevel.MEDIUM: 1, ComplexityLevel.HIGH: 2}
+from ..models.dir import DIR, DiagramNode, NodeType
 
 # Mermaid shape syntax by node_type
 _NODE_SHAPES: dict[str, tuple[str, str]] = {
@@ -49,32 +46,16 @@ def _escape_label(label: str) -> str:
 class MermaidExporter:
     """Serializes a DIR to a Mermaid flowchart string."""
 
-    def serialize(
-        self,
-        dir: DIR,
-        max_complexity: ComplexityLevel = ComplexityLevel.HIGH,
-        direction: str = "LR",
-    ) -> str:
-        """
-        Serialize DIR to Mermaid flowchart syntax.
-
-        max_complexity: highest complexity level to include (default: all)
-        direction: LR (left-right) | TD (top-down) | RL | BT
-        """
-        max_order = _COMPLEXITY_ORDER[max_complexity]
+    def serialize(self, dir: DIR, direction: str = "LR") -> str:
+        """Serialize DIR to Mermaid flowchart syntax."""
         lines: list[str] = [f"graph {direction}"]
 
-        # Determine which nodes are within complexity budget
-        visible_node_ids = {
-            n.id for n in dir.nodes
-            if _COMPLEXITY_ORDER[n.complexity] <= max_order
-        }
+        all_node_ids = {n.id for n in dir.nodes}
 
-        # Groups → subgraphs (only if they contain visible nodes)
-        # Build a set of nodes that belong to at least one group
+        # Groups → subgraphs
         grouped_node_ids: set[str] = set()
         for group in dir.groups:
-            members = [nid for nid in group.contains if nid in visible_node_ids]
+            members = [nid for nid in group.contains if nid in all_node_ids]
             if not members:
                 continue
             grouped_node_ids.update(members)
@@ -87,25 +68,16 @@ class MermaidExporter:
 
         # Top-level nodes (not in any group)
         for node in dir.nodes:
-            if node.id not in visible_node_ids:
-                continue
-            if node.id in grouped_node_ids:
-                continue
-            lines.append(f"  {self._node_def(node)}")
+            if node.id not in grouped_node_ids:
+                lines.append(f"  {self._node_def(node)}")
 
         # Edges
         for edge in dir.edges:
-            if _COMPLEXITY_ORDER[edge.complexity] > max_order:
+            if edge.from_node not in all_node_ids or edge.to_node not in all_node_ids:
                 continue
-            if edge.from_node not in visible_node_ids or edge.to_node not in visible_node_ids:
-                continue
-
-            arrow = _ARROWS.get(
-                (edge.style.value, edge.direction.value), "-->"
-            )
+            arrow = _ARROWS.get((edge.style.value, edge.direction.value), "-->")
             src = _safe_id(edge.from_node)
             tgt = _safe_id(edge.to_node)
-
             if edge.label:
                 lines.append(f"  {src} {arrow}|\"{_escape_label(edge.label)}\"| {tgt}")
             else:
@@ -116,5 +88,5 @@ class MermaidExporter:
     def _node_def(self, node: DiagramNode) -> str:
         open_b, close_b = _NODE_SHAPES.get(node.node_type, ("[", "]"))
         label = _escape_label(node.label)
-        safe = _safe_id(node.id)
+        safe  = _safe_id(node.id)
         return f'{safe}{open_b}"{label}"{close_b}'

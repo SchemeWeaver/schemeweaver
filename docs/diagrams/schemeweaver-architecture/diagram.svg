@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 960" width="1040" height="960" role="img" aria-label="Diagram: Scheme Weaver Components Overview" data-sw-version="1.0" data-diagram-type="architecture">
-  <title>Scheme Weaver Components Overview</title>
-  <desc>Overview of the components within Scheme Weaver, an AI diagramming pipeline including a FastAPI server, core library, SVGKit library, Rust CLI, ARQ worker, and planned Nuxt web editor.</desc>
+<svg xmlns:sw="https://schemeweaver.dev/ns/1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 640" width="800" height="640" role="img" aria-label="Diagram: Scheme Weaver Architecture Diagram" data-sw-version="1.0" data-diagram-type="architecture">
+  <metadata>
+    <sw:dir>{"version":"1.0","meta":{"title":"Scheme Weaver Architecture Diagram","description":"An AI diagramming pipeline consisting of a FastAPI server, core library for processing LLM outputs and rendering diagrams, SVGKit library for output validation, a Rust CLI client, an ARQ worker for asynchronous job generation, and a planned Nuxt web editor.","diagram_type":"architecture","author":"schemeweaver","version":"1.0"},"complexity_levels":["low","medium","high"],"nodes":[{"id":"apis-server","label":"FastAPI Server","node_type":"service","complexity":"low","description":"Provides two REST endpoints: POST /v1/generate and POST /v1/update.","metadata":{},"children":[],"x":null,"y":null},{"id":"libs-core-pipeline-class","label":"Core Pipeline Class","node_type":"generic","complexity":"low","description":"Sends prompts to LLM providers and parses responses into DIR JSON format.","metadata":{},"children":[{"id":"llm-anthropic-claude","label":"LLM Provider - Anthropic Claude","node_type":"generic","complexity":"medium","description":"Provides access to the Claude language model for generating and updating diagrams.","metadata":{},"children":[],"x":null,"y":null},{"id":"llm-openai-chat","label":"LLM Provider - OpenAI Chat","node_type":"generic","complexity":"medium","description":"Provides access to the OpenAI language model for generating and updating diagrams.","metadata":{},"children":[],"x":null,"y":null},{"id":"llm-ollama-local","label":"LLM Provider - Ollama (Local Model)","node_type":"generic","complexity":"medium","description":"Provides access to a local language model for generating and updating diagrams.","metadata":{},"children":[],"x":null,"y":null}],"x":null,"y":null},{"id":"libs-core-renderer","label":"Renderer","node_type":"generic","complexity":"low","description":"Converts DIR JSON into semantic SVG using a BFS topological layout engine.","metadata":{},"children":[],"x":null,"y":null},{"id":"libs-svgkit","label":"SVGKit Library","node_type":"generic","complexity":"high","description":"Post-processes generated SVG output by validating ARIA labels and enforcing semantic node IDs.","metadata":{},"children":[],"x":null,"y":null},{"id":"apps-cli-client","label":"Rust CLI Client","node_type":"generic","complexity":"low","description":"A thin HTTP client over the FastAPI server with generate and update subcommands.","metadata":{},"children":[],"x":null,"y":null},{"id":"jobs-worker-queue","label":"ARQ Async Worker - Redis Job Queue","node_type":"generic","complexity":"low","description":"Handles asynchronous job processing for diagram generation, decoupling LLM calls from HTTP requests.","metadata":{},"children":[],"x":null,"y":null}],"edges":[{"id":"apis-server-to-libs-core-pipeline-class","from_node":"apis-server","to_node":"libs-core-pipeline-class","label":"Request","complexity":"low","style":"solid","direction":"forward"},{"id":"libs-core-renderer-to-libs-svgkit","from_node":"libs-core-renderer","to_node":"libs-svgkit","label":"SVG Output","complexity":"high","style":"solid","direction":"forward"},{"id":"apis-server-to-apps-cli-client","from_node":"apis-server","to_node":"apps-cli-client","label":"HTTP Request/Response","complexity":"low","style":"dashed","direction":"bidirectional"},{"id":"libs-core-pipeline-class-to-jobs-worker-queue","from_node":"libs-core-pipeline-class","to_node":"jobs-worker-queue","label":"LLM Job Queue","complexity":"low","style":"dotted","direction":"forward"}],"groups":[{"id":"core-diagram-pipeline-components","label":"Core Diagram Pipeline Components","complexity":"low","contains":["apis-server","libs-core-pipeline-class","llm-anthropic-claude","llm-openai-chat","llm-ollama-local","libs-core-renderer"],"metadata":{}}]}</sw:dir>
+  </metadata>
+  <title>Scheme Weaver Architecture Diagram</title>
+  <desc>An AI diagramming pipeline consisting of a FastAPI server, core library for processing LLM outputs and rendering diagrams, SVGKit library for output validation, a Rust CLI client, an ARQ worker for asynchronous job generation, and a planned Nuxt web editor.</desc>
   <defs>
     <style>
-  .sw-node rect { cursor: pointer; transition: filter 0.15s; }
-  .sw-node:hover rect { filter: brightness(0.95); }
+  /* complexity layers */
   .complexity-low { display: block; }
   .complexity-medium { display: block; }
   .complexity-high { display: none; }
+
+  /* base styles */
+  .sw-node rect { cursor: pointer; }
+  .sw-node:hover rect { filter: brightness(0.93); transition: filter 0.15s; }
   .sw-group { opacity: 0.7; }
   .sw-edge line, .sw-edge path { stroke: #666; stroke-width: 1.5; fill: none; }
   .sw-edge text { font: 11px sans-serif; fill: #555; }
@@ -16,87 +22,93 @@
   .sw-node .sw-node-label { font-weight: 600; }
   .sw-node .sw-node-type { font: 10px monospace; fill: #888; }
   .sw-group text { font: 12px sans-serif; fill: #666; font-weight: 600; }
-  </style>
+
+  /* entrance animations */
+  .sw-node {
+    animation: sw-node-in 0.25s ease both;
+  }
+  #sw-edges &gt; .sw-edge line,
+  #sw-edges &gt; .sw-edge path {
+    stroke-dasharray: 2000;
+    stroke-dashoffset: 2000;
+    animation: sw-edge-in 0.45s ease forwards;
+    animation-delay: 0.41s;
+  }
+
+  @keyframes sw-node-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes sw-edge-in {
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* per-node stagger delays */
+  #sw-nodes &gt; .sw-node:nth-child(1) { animation-delay: 0.00s; }
+  #sw-nodes &gt; .sw-node:nth-child(2) { animation-delay: 0.06s; }
+  #sw-nodes &gt; .sw-node:nth-child(3) { animation-delay: 0.12s; }
+  #sw-nodes &gt; .sw-node:nth-child(4) { animation-delay: 0.18s; }
+  #sw-nodes &gt; .sw-node:nth-child(5) { animation-delay: 0.24s; }
+  #sw-nodes &gt; .sw-node:nth-child(6) { animation-delay: 0.30s; }
+</style>
     <marker id="sw-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
     </marker>
   </defs>
   <g id="sw-groups" class="sw-layer">
-    <g id="group-core-components-group" class="sw-group complexity-low" data-complexity="low" aria-label="Group: Core Components of Scheme Weaver">
-      <rect x="60.0" y="60" width="560.0" height="580" rx="8" fill="none" stroke="#aaa" stroke-width="1.5" stroke-dasharray="6,3" />
-      <text x="68.0" y="76">Core Components of Scheme Weaver</text>
-    </g>
-    <g id="group-external-components-group" class="sw-group complexity-medium" data-complexity="medium" aria-label="Group: External Components of Scheme Weaver">
-      <rect x="300.0" y="60" width="440.0" height="100" rx="8" fill="none" stroke="#aaa" stroke-width="1.5" stroke-dasharray="6,3" />
-      <text x="308.0" y="76">External Components of Scheme Weaver</text>
+    <g id="group-core-diagram-pipeline-components" class="sw-group complexity-low" data-complexity="low" aria-label="Group: Core Diagram Pipeline Components">
+      <rect x="60.0" y="60" width="560.0" height="260" rx="8" fill="none" stroke="#aaa" stroke-width="1.5" stroke-dasharray="6,3" />
+      <text x="68.0" y="76">Core Diagram Pipeline Components</text>
     </g>
   </g>
   <g id="sw-edges" class="sw-layer">
-    <g id="edge-api-to-core-pipeline" class="sw-edge complexity-low" data-complexity="low" aria-label="Diagram requests from API server to core pipeline: apis-server to libs-core-pipeline">
-      <line x1="520.0" y1="300" x2="520.0" y2="400" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" />
-      <text x="526.0" y="350.0" text-anchor="start">Diagram requests from API server to core pipeline</text>
+    <g id="edge-apis-server-to-libs-core-pipeline-class" class="sw-edge complexity-low" data-complexity="low" aria-label="Request: apis-server to libs-core-pipeline-class">
+      <line x1="280.0" y1="140" x2="160.0" y2="240" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" />
+      <text x="226.0" y="190.0" text-anchor="start">Request</text>
     </g>
-    <g id="edge-llm-to-renderer" class="sw-edge complexity-high" data-complexity="high" aria-label="LLM response feeding into DIR JSON creation: llm-providers to libs-core-pipeline">
-      <line x1="160.0" y1="140" x2="520.0" y2="400" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" />
-      <text x="346.0" y="270.0" text-anchor="start">LLM response feeding into DIR JSON creation</text>
+    <g id="edge-libs-core-renderer-to-libs-svgkit" class="sw-edge complexity-high" data-complexity="high" aria-label="SVG Output: libs-core-renderer to libs-svgkit">
+      <line x1="520.0" y1="140" x2="640.0" y2="240" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" />
+      <text x="586.0" y="190.0" text-anchor="start">SVG Output</text>
     </g>
-    <g id="edge-dir-to-renderer" class="sw-edge complexity-low" data-complexity="low" aria-label="DIR JSON to renderer for SVG creation: libs-core-pipeline to libs-core-renderer">
-      <line x1="520.0" y1="460" x2="520.0" y2="560" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" />
-      <text x="526.0" y="510.0" text-anchor="start">DIR JSON to renderer for SVG creation</text>
+    <g id="edge-apis-server-to-apps-cli-client" class="sw-edge complexity-low" data-complexity="low" aria-label="HTTP Request/Response: apis-server to apps-cli-client">
+      <line x1="280.0" y1="140" x2="400.0" y2="240" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" stroke-dasharray="8,4" />
+      <text x="346.0" y="190.0" text-anchor="start">HTTP Request/Response</text>
     </g>
-    <g id="edge-render-to-postprocess" class="sw-edge complexity-medium" data-complexity="medium" aria-label="SVG validation and node ID enforcement by SVGKit: libs-core-renderer to libs-svgkit">
-      <line x1="520.0" y1="620" x2="520.0" y2="720" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" />
-      <text x="526.0" y="670.0" text-anchor="start">SVG validation and node ID enforcement by SVGKit</text>
-    </g>
-    <g id="edge-cli-to-api" class="sw-edge complexity-low" data-complexity="low" aria-label="CLI requests to the FastAPI server endpoints: apps-cli to apis-server">
-      <line x1="400.0" y1="140" x2="520.0" y2="240" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" />
-      <text x="466.0" y="190.0" text-anchor="start">CLI requests to the FastAPI server endpoints</text>
-    </g>
-    <g id="edge-worker-to-redis" class="sw-edge complexity-medium" data-complexity="medium" aria-label="Async requests managed by ARQ worker feeding into renderer via Redis job queue: jobs-worker to libs-core-renderer">
-      <line x1="640.0" y1="140" x2="520.0" y2="560" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" stroke-dasharray="8,4" />
-      <text x="586.0" y="350.0" text-anchor="start">Async requests managed by ARQ worker feeding into renderer via Redis job queue</text>
+    <g id="edge-libs-core-pipeline-class-to-jobs-worker-queue" class="sw-edge complexity-low" data-complexity="low" aria-label="LLM Job Queue: libs-core-pipeline-class to jobs-worker-queue">
+      <line x1="160.0" y1="300" x2="400.0" y2="400" stroke="#666" stroke-width="1.5" marker-end="url(#sw-arrow)" stroke-dasharray="2,3" />
+      <text x="286.0" y="350.0" text-anchor="start">LLM Job Queue</text>
     </g>
   </g>
   <g id="sw-nodes" class="sw-layer">
-    <g id="node-apis-server" class="sw-node complexity-low" data-complexity="low" data-node-type="service" aria-label="FastAPI Server (v1/generate &amp; v1/update): A RESTful API server exposing endpoints for diagram generation and updates." role="group">
-      <rect x="440.0" y="240" width="160" height="60" rx="6" ry="6" fill="#f0f4ff" stroke="#6c8ebf" stroke-width="1.5" />
-      <text x="520.0" y="266.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">FastAPI Server (v1/generate &amp; v1/update)</text>
-      <text x="520.0" y="284.0" text-anchor="middle" class="sw-node-type">service</text>
+    <g id="node-apis-server" class="sw-node complexity-low" data-complexity="low" data-node-type="service" aria-label="FastAPI Server: Provides two REST endpoints: POST /v1/generate and POST /v1/update." role="group">
+      <rect x="200.0" y="80" width="160" height="60" rx="6" ry="6" fill="#f0f4ff" stroke="#6c8ebf" stroke-width="1.5" />
+      <text x="280.0" y="106.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">FastAPI Server</text>
+      <text x="280.0" y="124.0" text-anchor="middle" class="sw-node-type">service</text>
     </g>
-    <g id="node-libs-core-pipeline" class="sw-node complexity-low" data-complexity="low" data-node-type="generic" aria-label="Core Library - Pipeline Class: Sends prompts to LLM providers and converts responses into DIR JSON." role="group">
-      <rect x="440.0" y="400" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
-      <text x="520.0" y="426.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Core Library - Pipeline Class</text>
-      <text x="520.0" y="444.0" text-anchor="middle" class="sw-node-type">generic</text>
+    <g id="node-libs-core-pipeline-class" class="sw-node complexity-low" data-complexity="low" data-node-type="generic" aria-label="Core Pipeline Class: Sends prompts to LLM providers and parses responses into DIR JSON format." role="group">
+      <rect x="80.0" y="240" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
+      <text x="160.0" y="266.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Core Pipeline Class</text>
+      <text x="160.0" y="284.0" text-anchor="middle" class="sw-node-type">generic</text>
     </g>
-    <g id="node-libs-core-renderer" class="sw-node complexity-medium" data-complexity="medium" data-node-type="generic" aria-label="Core Library - Renderer: Converts DIR JSON into an SVG using BFS topological layout engine." role="group">
-      <rect x="440.0" y="560" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
-      <text x="520.0" y="586.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Core Library - Renderer</text>
-      <text x="520.0" y="604.0" text-anchor="middle" class="sw-node-type">generic</text>
+    <g id="node-libs-core-renderer" class="sw-node complexity-low" data-complexity="low" data-node-type="generic" aria-label="Renderer: Converts DIR JSON into semantic SVG using a BFS topological layout engine." role="group">
+      <rect x="440.0" y="80" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
+      <text x="520.0" y="106.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Renderer</text>
+      <text x="520.0" y="124.0" text-anchor="middle" class="sw-node-type">generic</text>
     </g>
-    <g id="node-llm-providers" class="sw-node complexity-high" data-complexity="high" data-node-type="generic" aria-label="Pluggable LLM Providers: Providers for Anthropic Claude, OpenAI, and Ollama." role="group">
-      <rect x="80.0" y="80" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
-      <text x="160.0" y="106.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Pluggable LLM Providers</text>
-      <text x="160.0" y="124.0" text-anchor="middle" class="sw-node-type">generic</text>
+    <g id="node-libs-svgkit" class="sw-node complexity-high" data-complexity="high" data-node-type="generic" aria-label="SVGKit Library: Post-processes generated SVG output by validating ARIA labels and enforcing semantic node IDs." role="group">
+      <rect x="560.0" y="240" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
+      <text x="640.0" y="266.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">SVGKit Library</text>
+      <text x="640.0" y="284.0" text-anchor="middle" class="sw-node-type">generic</text>
     </g>
-    <g id="node-libs-svgkit" class="sw-node complexity-medium" data-complexity="medium" data-node-type="generic" aria-label="SVGKit Library: Validates ARIA labels and semantic node IDs in SVG output post-processing stage." role="group">
-      <rect x="440.0" y="720" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
-      <text x="520.0" y="746.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">SVGKit Library</text>
-      <text x="520.0" y="764.0" text-anchor="middle" class="sw-node-type">generic</text>
+    <g id="node-apps-cli-client" class="sw-node complexity-low" data-complexity="low" data-node-type="generic" aria-label="Rust CLI Client: A thin HTTP client over the FastAPI server with generate and update subcommands." role="group">
+      <rect x="320.0" y="240" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
+      <text x="400.0" y="266.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Rust CLI Client</text>
+      <text x="400.0" y="284.0" text-anchor="middle" class="sw-node-type">generic</text>
     </g>
-    <g id="node-apps-cli" class="sw-node complexity-low" data-complexity="low" data-node-type="service" aria-label="Rust CLI: A thin HTTP client over FastAPI server with generate and update subcommands as a single binary." role="group">
-      <rect x="320.0" y="80" width="160" height="60" rx="6" ry="6" fill="#f0f4ff" stroke="#6c8ebf" stroke-width="1.5" />
-      <text x="400.0" y="106.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Rust CLI</text>
-      <text x="400.0" y="124.0" text-anchor="middle" class="sw-node-type">service</text>
-    </g>
-    <g id="node-jobs-worker" class="sw-node complexity-medium" data-complexity="medium" data-node-type="generic" aria-label="ARQ Async Worker (Redis-backed Job Queue): Provides asynchronous diagram generation via decoupling of long-running LLM calls from HTTP requests." role="group">
-      <rect x="560.0" y="80" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
-      <text x="640.0" y="106.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">ARQ Async Worker (Redis-backed Job Queue)</text>
-      <text x="640.0" y="124.0" text-anchor="middle" class="sw-node-type">generic</text>
-    </g>
-    <g id="node-apps-web-editor" class="sw-node complexity-medium" data-complexity="medium" data-node-type="generic" aria-label="Nuxt 4 Web Editor (planned): A planned web-based editor using Nuxt.js Framework for diagram creation and management." role="group">
-      <rect x="800.0" y="80" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
-      <text x="880.0" y="106.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">Nuxt 4 Web Editor (planned)</text>
-      <text x="880.0" y="124.0" text-anchor="middle" class="sw-node-type">generic</text>
+    <g id="node-jobs-worker-queue" class="sw-node complexity-low" data-complexity="low" data-node-type="generic" aria-label="ARQ Async Worker - Redis Job Queue: Handles asynchronous job processing for diagram generation, decoupling LLM calls from HTTP requests." role="group">
+      <rect x="320.0" y="400" width="160" height="60" rx="6" ry="6" fill="#f5f5f5" stroke="#aaaaaa" stroke-width="1.5" />
+      <text x="400.0" y="426.0" text-anchor="middle" dominant-baseline="middle" class="sw-node-label">ARQ Async Worker - Redis Job Queue</text>
+      <text x="400.0" y="444.0" text-anchor="middle" class="sw-node-type">generic</text>
     </g>
   </g>
 </svg>

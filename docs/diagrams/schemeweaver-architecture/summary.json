@@ -1,16 +1,17 @@
 {
   "slug": "schemeweaver-architecture",
   "prompt": "Scheme Weaver \u2014 an AI diagramming pipeline with the following components: A FastAPI server (apis/server) exposes two REST endpoints: POST /v1/generate and POST /v1/update. The Core library (libs/core) contains: a Pipeline class that sends prompts to an LLM provider and parses the response into a DIR (Diagram Intermediate Representation) \u2014 structured JSON with nodes, edges, groups, and complexity levels; a Renderer that converts DIR into semantic SVG using a BFS topological layout engine; and pluggable LLM providers for Anthropic Claude, OpenAI, and Ollama (local models). The SVGKit library (libs/svgkit) post-processes SVG output: validating ARIA labels and enforcing semantic node IDs. A Rust CLI (apps/cli) is a thin HTTP client over the FastAPI server that ships as a single binary with generate and update subcommands. An ARQ async worker (jobs/worker) provides a Redis-backed job queue for async diagram generation, decoupling long-running LLM calls from HTTP requests. A Nuxt 4 web editor (apps/web) is planned. Data flow: user prompt enters via CLI or HTTP \u2192 FastAPI server \u2192 Core Pipeline \u2192 LLM provider \u2192 DIR JSON \u2192 Renderer \u2192 SVG \u2192 PostProcessor \u2192 response.",
-  "title": "Scheme Weaver Components Overview",
+  "title": "Scheme Weaver Architecture Diagram",
   "diagram_type": "architecture",
-  "elapsed_s": 78.94,
-  "nodes": 8,
-  "edges": 6,
-  "groups": 2,
+  "elapsed_s": 77.54,
+  "nodes": 6,
+  "edges": 4,
+  "groups": 1,
   "complexity": {
-    "low": 3,
-    "medium": 4,
+    "low": 5,
     "high": 1
   },
-  "issues": []
+  "issues": [],
+  "provider": "ollama",
+  "model": "qwen2.5:14b"
 }

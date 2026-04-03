@@ -2,7 +2,7 @@
  * Central state hub for the diagram editor.
  * Owns the current DIR, SVG, Mermaid, issues, and loading state.
  */
-import type { DIR, GenerateResponse, ComplexityLevel, NodeType } from '~/types/dir'
+import type { DIR, GenerateResponse, NodeType, DiagramNode, DiagramEdge } from '~/types/dir'
 
 const dir = ref<DIR | null>(null)
 const svg = ref<string>('')
@@ -10,7 +10,6 @@ const mermaid = ref<string>('')
 const issues = ref<string[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
-const complexity = ref<ComplexityLevel>('medium')
 const selectedModel = ref<string>('')
 const activeModel = ref<string>('')  // model that produced the current diagram
 const currentSlug = ref<string | null>(null)  // null = unsaved draft
@@ -96,9 +95,39 @@ export function useDiagram() {
       id,
       label,
       node_type: nodeType as NodeType,
-      complexity: 'low' as ComplexityLevel,
       children: [],
     })
+    return id
+  }
+
+  function deleteNode(id: string): void {
+    if (!dir.value) return
+    dir.value.nodes = dir.value.nodes.filter(n => n.id !== id)
+    dir.value.edges = dir.value.edges.filter(e => e.from_node !== id && e.to_node !== id)
+    for (const g of dir.value.groups) g.contains = g.contains.filter(c => c !== id)
+  }
+
+  function deleteEdge(id: string): void {
+    if (!dir.value) return
+    dir.value.edges = dir.value.edges.filter(e => e.id !== id)
+  }
+
+  function updateNode(id: string, patch: Partial<DiagramNode>): void {
+    if (!dir.value) return
+    const node = dir.value.nodes.find(n => n.id === id)
+    if (node) Object.assign(node, patch)
+  }
+
+  function updateEdge(id: string, patch: Partial<DiagramEdge>): void {
+    if (!dir.value) return
+    const edge = dir.value.edges.find(e => e.id === id)
+    if (edge) Object.assign(edge, patch)
+  }
+
+  function addEdge(fromId: string, toId: string): string | null {
+    if (!dir.value) return null
+    const id = `edge-${fromId}-${toId}-${Date.now()}`
+    dir.value.edges.push({ id, from_node: fromId, to_node: toId, style: 'solid', direction: 'forward' })
     return id
   }
 
@@ -129,13 +158,12 @@ export function useDiagram() {
   }
 
   return {
-    dir: readonly(dir),
+    dir: readonly(dir) as Ref<DIR | null>,
     svg: readonly(svg),
     mermaid: readonly(mermaid),
     issues: readonly(issues),
     loading: readonly(loading),
     error: readonly(error),
-    complexity,
     selectedModel,
     activeModel: readonly(activeModel),
     currentSlug: readonly(currentSlug),
@@ -146,6 +174,11 @@ export function useDiagram() {
     reset,
     loadSaved,
     addNode,
+    addEdge,
+    deleteNode,
+    deleteEdge,
+    updateNode,
+    updateEdge,
     updateNodePosition,
   }
 }

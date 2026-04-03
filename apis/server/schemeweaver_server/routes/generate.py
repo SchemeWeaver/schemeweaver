@@ -11,7 +11,6 @@ from pydantic import BaseModel, ValidationError
 log = logging.getLogger("schemeweaver.generate")
 
 from schemeweaver_core.exporters import MermaidExporter
-from schemeweaver_core.models.dir import ComplexityLevel
 from schemeweaver_core.pipeline import Pipeline
 from schemeweaver_core.providers import make_provider
 from schemeweaver_core.renderer import Renderer
@@ -98,7 +97,12 @@ def _build_model_list() -> list["ModelInfo"]:
 
 
 def _default_model(models: list["ModelInfo"]) -> str:
-    """Return the ID of the first accessible model in registry order."""
+    """Return the ID of the default model (qwen2.5:14b if accessible, else first accessible)."""
+    # Prefer qwen2.5:14b if available
+    qwen = next((m.id for m in models if m.id == "qwen2.5:14b" and m.accessible), None)
+    if qwen:
+        return qwen
+    # Fall back to first accessible model
     first = next((m.id for m in models if m.accessible), None)
     if first is None:
         raise ValueError("No accessible model found. Add an API key or start Ollama.")
@@ -110,7 +114,6 @@ def _default_model(models: list["ModelInfo"]) -> str:
 class GenerateRequest(BaseModel):
     prompt: str
     context: Optional[str] = None
-    complexity: Optional[ComplexityLevel] = None
     model: Optional[str] = None
 
 
@@ -125,7 +128,6 @@ class GenerateResponse(BaseModel):
 class UpdateRequest(BaseModel):
     dir: dict
     feedback: str
-    complexity: Optional[ComplexityLevel] = None
     model: Optional[str] = None
 
 
@@ -166,7 +168,7 @@ async def generate(req: GenerateRequest):
     try:
         pipeline = _build_pipeline(model_id)
         dir_result = await loop.run_in_executor(None, pipeline.generate, req.prompt, req.context)
-        svg = renderer.render(dir_result, active_complexity=req.complexity)
+        svg = renderer.render(dir_result)
         svg = postprocessor.process(svg)
         issues = postprocessor.validate(svg)
         if issues:
@@ -199,7 +201,7 @@ async def update(req: UpdateRequest):
         pipeline = _build_pipeline(model_id)
         current_dir = DIR.model_validate(req.dir)
         updated_dir = await loop.run_in_executor(None, pipeline.refine, current_dir, req.feedback)
-        svg = renderer.render(updated_dir, active_complexity=req.complexity)
+        svg = renderer.render(updated_dir)
         svg = postprocessor.process(svg)
         issues = postprocessor.validate(svg)
         if issues:

@@ -87,9 +87,9 @@ def slugify(text: str) -> str:
 
 
 def print_header(text: str) -> None:
-    print(f"\n{'─' * 60}")
+    print(f"\n{'-' * 60}")
     print(f"  {text}")
-    print(f"{'─' * 60}")
+    print(f"{'-' * 60}")
 
 
 def check_ollama_models(base_url: str) -> None:
@@ -121,6 +121,7 @@ def run_case(
     out_dir: Path,
     provider: str = "",
     model: str = "",
+    write_to_data_out: bool = True,
 ) -> dict:
     """Run one generation case. Returns a result summary dict."""
     out_path = out_dir / slug
@@ -189,6 +190,19 @@ def run_case(
         (out_path / "summary.json").write_text(
             json.dumps(summary, indent=2), encoding="utf-8"
         )
+
+        # If writing to docs/diagrams for --self, also copy to data/out for UI access
+        if write_to_data_out and out_dir != DEFAULT_OUT_DIR:
+            data_out_path = DEFAULT_OUT_DIR / slug
+            data_out_path.mkdir(parents=True, exist_ok=True)
+            (data_out_path / "diagram.svg").write_text(svg, encoding="utf-8")
+            (data_out_path / "diagram.mmd").write_text(mermaid, encoding="utf-8")
+            (data_out_path / "diagram.dir.json").write_text(
+                dir_result.model_dump_json(indent=2), encoding="utf-8"
+            )
+            (data_out_path / "summary.json").write_text(
+                json.dumps(summary, indent=2), encoding="utf-8"
+            )
 
         result["success"] = True
 
@@ -329,7 +343,12 @@ def main() -> None:
     # ── run ───────────────────────────────────────────────────────────────────
     results = []
     for case in cases:
-        res = run_case(pipeline, renderer, postprocessor, mermaid_exporter, case["slug"], case["prompt"], complexity, out_dir, provider=args.provider, model=args.model)
+        res = run_case(
+            pipeline, renderer, postprocessor, mermaid_exporter,
+            case["slug"], case["prompt"], complexity, out_dir,
+            provider=args.provider, model=args.model,
+            write_to_data_out=args.self_diagram  # Copy to data/out for UI access when using --self
+        )
         results.append(res)
 
     # ── summary ───────────────────────────────────────────────────────────────

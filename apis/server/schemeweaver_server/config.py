@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     models_registry: Path = _REPO_ROOT / "config" / "models.json"
 
     class Config:
-        env_file = ".env"
+        env_file = _REPO_ROOT / ".env"
 
 
 settings = Settings()

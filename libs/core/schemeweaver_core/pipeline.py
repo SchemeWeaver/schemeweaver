@@ -14,12 +14,10 @@ def _extract_json(raw: str) -> str:
     - Extra text before/after the JSON
     - Trailing commentary after a valid JSON object
     """
-    # Strip markdown code fences
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
     if fenced:
         return fenced.group(1)
 
-    # Find the outermost { ... } by tracking brace depth
     start = raw.find("{")
     if start == -1:
         raise json.JSONDecodeError("No JSON object found", raw, 0)
@@ -48,6 +46,7 @@ def _extract_json(raw: str) -> str:
 
     raise json.JSONDecodeError("Unterminated JSON object", raw, start)
 
+
 SYSTEM_PROMPT = """You are a diagram architect. Given a description, produce a Diagram Intermediate Representation (DIR) as JSON.
 
 DIR schema:
@@ -56,14 +55,14 @@ DIR schema:
   "meta": {
     "title": string,
     "description": string,
-    "diagram_type": "architecture" | "flowchart" | "erd" | "sequence" | "generic"
+    "diagram_type": "architecture" | "flowchart" | "erd" | "sequence" | "generic",
+    "tags": [string]
   },
   "nodes": [
     {
       "id": string,          // kebab-case, semantic (e.g. "api-gateway", not "node-1")
       "label": string,       // human-readable
       "node_type": "generic" | "service" | "database" | "queue" | "storage" | "gateway" | "user" | "aws.lambda" | "aws.s3" | "aws.rds" | "aws.ec2" | "aws.elasticache" | "aws.api_gateway",
-      "complexity": "low" | "medium" | "high",  // "low" = always visible, "high" = fine detail only
       "description": string, // what this component does
       "children": [],        // nested sub-nodes for drill-down
       "metadata": {}
@@ -75,7 +74,6 @@ DIR schema:
       "from": string,        // source node id
       "to": string,          // target node id
       "label": string,       // what the connection represents
-      "complexity": "low" | "medium" | "high",
       "style": "solid" | "dashed" | "dotted",
       "direction": "forward" | "backward" | "bidirectional"
     }
@@ -84,7 +82,6 @@ DIR schema:
     {
       "id": string,
       "label": string,
-      "complexity": "low" | "medium" | "high",
       "contains": [string],  // node ids in this group
       "metadata": {}
     }
@@ -92,12 +89,20 @@ DIR schema:
 }
 
 Rules:
-- Assign complexity carefully: main services → "low", supporting infra → "medium", impl details → "high"
 - Use descriptive semantic IDs in kebab-case
 - Every node must have a description
 - Groups should capture meaningful boundaries (VPCs, regions, domains, teams)
 - For architecture diagrams: identify services, their connections, and logical groupings
 - Output ONLY valid JSON. No markdown code fences, no explanation."""
+
+
+_VALID_NODE_TYPES = {
+    "generic", "service", "database", "queue", "storage", "gateway", "user",
+    "aws.lambda", "aws.s3", "aws.rds", "aws.ec2", "aws.elasticache", "aws.api_gateway",
+}
+_VALID_DIAGRAM_TYPES = {"architecture", "flowchart", "erd", "sequence", "generic"}
+_VALID_EDGE_STYLES      = {"solid", "dashed", "dotted"}
+_VALID_EDGE_DIRECTIONS  = {"forward", "backward", "bidirectional"}
 
 
 def _normalize_edges(data: dict) -> dict:
@@ -111,8 +116,6 @@ def _normalize_edges(data: dict) -> dict:
             edge["style"] = "solid"
         if edge.get("direction") not in _VALID_EDGE_DIRECTIONS:
             edge["direction"] = "forward"
-        if edge.get("complexity") not in _VALID_COMPLEXITY:
-            edge["complexity"] = "low"
     return data
 
 
@@ -124,34 +127,29 @@ def _normalize_meta(data: dict) -> dict:
     return data
 
 
-_VALID_NODE_TYPES = {
-    "generic", "service", "database", "queue", "storage", "gateway", "user",
-    "aws.lambda", "aws.s3", "aws.rds", "aws.ec2", "aws.elasticache", "aws.api_gateway",
-}
-
-_VALID_DIAGRAM_TYPES = {"architecture", "flowchart", "erd", "sequence", "generic"}
-_VALID_COMPLEXITY = {"low", "medium", "high"}
-_VALID_EDGE_STYLES = {"solid", "dashed", "dotted"}
-_VALID_EDGE_DIRECTIONS = {"forward", "backward", "bidirectional"}
-
-
 def _normalize_node(node: dict) -> dict:
     """Fill in missing or invalid fields on a node (and its children recursively)."""
     if "label" not in node:
         node["label"] = node.get("id", "unknown")
     if node.get("node_type") not in _VALID_NODE_TYPES:
         node["node_type"] = "generic"
-    if node.get("complexity") not in _VALID_COMPLEXITY:
-        node["complexity"] = "low"
+    # Strip any stale complexity field the model may still emit
+    node.pop("complexity", None)
     for child in node.get("children", []):
         _normalize_node(child)
     return node
 
 
 def _normalize_nodes(data: dict) -> dict:
-    """Normalize all nodes in the DIR, including nested children."""
     for node in data.get("nodes", []):
         _normalize_node(node)
+    # Strip stale top-level complexity_levels if present
+    data.pop("complexity_levels", None)
+    # Strip complexity from edges and groups
+    for edge in data.get("edges", []):
+        edge.pop("complexity", None)
+    for group in data.get("groups", []):
+        group.pop("complexity", None)
     return data
 
 
@@ -167,7 +165,7 @@ class Pipeline:
         if context:
             user_message = f"{prompt}\n\nAdditional context:\n{context}"
 
-        raw = self.provider.complete(SYSTEM_PROMPT, user_message)
+        raw  = self.provider.complete(SYSTEM_PROMPT, user_message)
         data = _normalize_meta(_normalize_nodes(_normalize_edges(json.loads(_extract_json(raw)))))
         return DIR.model_validate(data)
 
@@ -182,6 +180,6 @@ Refine it based on this feedback:
 
 Output the complete updated DIR JSON."""
 
-        raw = self.provider.complete(SYSTEM_PROMPT, user_message)
+        raw  = self.provider.complete(SYSTEM_PROMPT, user_message)
         data = _normalize_meta(_normalize_nodes(_normalize_edges(json.loads(_extract_json(raw)))))
         return DIR.model_validate(data)

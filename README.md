@@ -58,9 +58,10 @@ The DIR is the source of truth. It's what the CLI saves, the API returns, the we
 
 - Python 3.12+
 - [`uv`](https://docs.astral.sh/uv/) — `pip install uv`
-- An Anthropic API key
+- An Anthropic API key (or Ollama for local models)
 - Rust + Cargo (for the CLI binary) — [rustup.rs](https://rustup.rs)
 - `just` (task runner) — `cargo install just`
+- Node.js + `pnpm` (for the web editor)
 
 ### Setup
 
@@ -73,15 +74,44 @@ cp .env.example .env
 
 uv sync          # install all Python dependencies
 cargo fetch      # prefetch Rust dependencies
+pnpm install     # install web editor dependencies
 ```
 
-### Run the API server
+### Run the full stack (server + worker + web editor)
 
 ```bash
-just dev-server
-# → http://localhost:8000
-# → http://localhost:8000/docs  (Swagger UI)
+just dev
+# → API: http://localhost:8000
+# → Swagger: http://localhost:8000/docs
+# → Web Editor: http://localhost:3000
 ```
+
+Or run components individually:
+
+```bash
+just dev-server   # FastAPI only
+just dev-worker   # ARQ worker only
+just dev-web      # Nuxt web editor only
+```
+
+### Use the Web Editor
+
+The web editor provides a visual interface for generating and managing diagrams:
+
+1. Start the full stack: `just dev`
+2. Open http://localhost:3000
+3. Enter a prompt in the bottom bar (e.g., "AWS three-tier architecture")
+4. View generated diagrams with interactive complexity filtering
+5. Browse saved diagrams in the library panel
+6. Export diagrams as SVG, PNG, or Mermaid
+
+**Features:**
+- Real-time diagram generation with progress feedback
+- Complexity level filtering (low/medium/high toggle)
+- Diagram library with search and filtering
+- Model selector (Claude, GPT, or Ollama models)
+- Export to multiple formats
+- Automatic saving to `data/out/`
 
 ### Generate a diagram via curl
 
@@ -202,6 +232,63 @@ Refine an existing diagram using feedback.
 
 **Response:** same as `/v1/generate`
 
+### `GET /v1/models`
+
+List available AI models and their accessibility.
+
+**Response:**
+```json
+{
+  "default": "qwen2.5:14b",
+  "models": [
+    {
+      "id": "qwen2.5:14b",
+      "provider": "ollama",
+      "accessible": true
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "provider": "anthropic",
+      "accessible": false
+    }
+  ]
+}
+```
+
+### `GET /v1/library`
+
+List all saved diagrams in `data/out/`.
+
+**Response:**
+```json
+[
+  {
+    "slug": "aws-three-tier",
+    "title": "Three-Tier Web Application on AWS",
+    "diagram_type": "architecture",
+    "nodes": 4,
+    "edges": 2,
+    "groups": 2,
+    "elapsed_s": 27.63,
+    "issues": [],
+    "model": "qwen2.5:14b"
+  }
+]
+```
+
+### `GET /v1/library/{slug}`
+
+Load a saved diagram by slug.
+
+**Response:**
+```json
+{
+  "dir": { ... },
+  "svg": "<svg>...</svg>",
+  "issues": []
+}
+```
+
 ### `GET /health`
 
 ```json
@@ -267,7 +354,7 @@ document.querySelectorAll('.complexity-medium').forEach(el => el.style.display =
 ```
 schemeweaver/
 ├── apps/
-│   ├── web/              ← Nuxt 4 + Vue 3 editor (coming soon)
+│   ├── web/              ← Nuxt 4 + Vue 3 editor with diagram library
 │   └── cli/              ← Rust CLI (single binary)
 ├── apis/
 │   └── server/           ← FastAPI backend
@@ -295,7 +382,7 @@ schemeweaver/
 | Backend API | FastAPI + uvicorn |
 | Async jobs | ARQ + Redis |
 | CLI | Rust (clap, reqwest, indicatif) |
-| Web editor | Nuxt 4 + Vue 3 *(coming soon)* |
+| Web editor | Nuxt 4 + Vue 3 + Tailwind CSS |
 | Package manager | uv (Python), Cargo (Rust), pnpm (Node) |
 | Task runner | just |
 
@@ -319,10 +406,11 @@ just dev-worker    # ARQ worker watching for jobs
 
 - [x] Core pipeline: Claude → DIR → semantic SVG
 - [x] Complexity scaling (`low | medium | high`) embedded in SVG
-- [x] REST API (`/v1/generate`, `/v1/update`)
+- [x] REST API (`/v1/generate`, `/v1/update`, `/v1/library`)
 - [x] Rust CLI (`generate`, `update`)
 - [x] ARQ async worker scaffold
-- [ ] Nuxt 4 web editor with interactive complexity slider
+- [x] Nuxt 4 web editor with diagram library and complexity filtering
+- [x] Multi-model support (Anthropic, OpenAI, Ollama)
 - [ ] `scan` — repo → architecture diagram
 - [ ] `vectorize` — screenshot → SVG wireframe
 - [ ] Multi-pass agentic refinement loop

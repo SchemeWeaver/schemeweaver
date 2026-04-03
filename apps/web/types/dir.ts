@@ -3,8 +3,7 @@
  * Field names match Python model_dump() output: from_node / to_node (not from/to).
  */
 
-export type ComplexityLevel = 'low' | 'medium' | 'high'
-export type DiagramType = 'architecture' | 'sequence' | 'flowchart' | 'er' | 'generic'
+export type DiagramType = 'architecture' | 'sequence' | 'er' | 'flowchart' | 'generic'
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted'
 export type EdgeDirection = 'forward' | 'backward' | 'bidirectional'
 
@@ -35,8 +34,7 @@ export interface DiagramNode {
   label: string
   node_type: NodeType
   description?: string
-  complexity: ComplexityLevel
-  group?: string
+  metadata?: Record<string, unknown>
   children?: DiagramNode[]
   x?: number
   y?: number
@@ -49,14 +47,13 @@ export interface DiagramEdge {
   label?: string
   style: EdgeStyle
   direction: EdgeDirection
-  complexity: ComplexityLevel
 }
 
 export interface DiagramGroup {
   id: string
   label: string
   contains: string[]
-  complexity: ComplexityLevel
+  metadata?: Record<string, unknown>
 }
 
 export interface DIR {

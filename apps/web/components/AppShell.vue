@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import ComplexityFilter from './ComplexityFilter.vue'
 import ExportBar from './ExportBar.vue'
 import { useDiagram } from '~/composables/useDiagram'
+import { useTool } from '~/composables/useTool'
 
 const props = defineProps<{ libraryOpen: boolean; shapesOpen: boolean }>()
 const emit = defineEmits<{ 'update:libraryOpen': [value: boolean]; 'update:shapesOpen': [value: boolean] }>()
 
 const { dir, loading, saving, currentSlug, save, reset } = useDiagram()
+const { tool } = useTool()
 
 const saveLabel = ref('Save')
 
@@ -44,6 +45,46 @@ function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
           </svg>
           <span class="app-shell__title">Scheme Weaver</span>
         </div>
+
+        <div class="app-shell__divider" />
+
+        <!-- Tool switcher -->
+        <div class="app-shell__tool-group" role="toolbar" aria-label="Interaction mode">
+          <button
+            :class="['app-shell__tool-btn', { active: tool === 'grab' }]"
+            title="Grab — move nodes, pan canvas (G)"
+            @click="tool = 'grab'"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M4 1.5v5.3M6.5 3v3.8M9 4v3.8M11.5 5.5V8c0 2.5-1.5 4-4 4H6c-1.5 0-2.5-.7-3-2L1.5 7c-.3-.6 0-1.2.6-1.4.6-.2 1.2.1 1.4.6L4 7.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button
+            :class="['app-shell__tool-btn', { active: tool === 'lasso' }]"
+            title="Lasso — drag to select multiple nodes (L)"
+            @click="tool = 'lasso'"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="2" y="3.5" width="10" height="7" rx="1.2" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2.5 1.5"/>
+              <circle cx="2" cy="3.5" r="1" fill="currentColor"/>
+              <circle cx="12" cy="3.5" r="1" fill="currentColor"/>
+              <circle cx="2" cy="10.5" r="1" fill="currentColor"/>
+              <circle cx="12" cy="10.5" r="1" fill="currentColor"/>
+            </svg>
+          </button>
+          <button
+            :class="['app-shell__tool-btn', { active: tool === 'connect' }]"
+            title="Connect — click two nodes to draw an edge (C)"
+            @click="tool = 'connect'"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="2.5" cy="7" r="1.8" stroke="currentColor" stroke-width="1.3"/>
+              <circle cx="11.5" cy="7" r="1.8" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M4.3 7h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              <path d="M6.5 5.5L8.2 7l-1.7 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Center: diagram title when active -->
@@ -66,9 +107,6 @@ function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
             <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
           </svg>
         </button>
-
-        <div class="app-shell__divider" />
-        <ComplexityFilter />
 
         <div class="app-shell__divider" />
 
@@ -235,6 +273,39 @@ function toggleShapes(): void { emit('update:shapesOpen', !props.shapesOpen) }
 
 .app-shell__new-btn {
   color: var(--text-muted);
+}
+
+/* ── Tool group ──────────────────────────────────────────────────────────── */
+.app-shell__tool-group {
+  display: flex;
+  background: var(--bg-chrome-raised);
+  border: 1px solid var(--border-chrome);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.app-shell__tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 1px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.app-shell__tool-btn:hover {
+  background: var(--bg-chrome-hover);
+  color: var(--text-primary);
+}
+.app-shell__tool-btn.active {
+  background: var(--accent-muted);
+  color: var(--accent);
 }
 
 .app-shell__divider {

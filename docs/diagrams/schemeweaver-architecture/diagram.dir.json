@@ -1,8 +1,8 @@
 {
   "version": "1.0",
   "meta": {
-    "title": "Scheme Weaver Components Overview",
-    "description": "Overview of the components within Scheme Weaver, an AI diagramming pipeline including a FastAPI server, core library, SVGKit library, Rust CLI, ARQ worker, and planned Nuxt web editor.",
+    "title": "Scheme Weaver Architecture Diagram",
+    "description": "An AI diagramming pipeline consisting of a FastAPI server, core library for processing LLM outputs and rendering diagrams, SVGKit library for output validation, a Rust CLI client, an ARQ worker for asynchronous job generation, and a planned Nuxt web editor.",
     "diagram_type": "architecture",
     "author": "schemeweaver",
     "version": "1.0"
@@ -15,154 +15,155 @@
   "nodes": [
     {
       "id": "apis-server",
-      "label": "FastAPI Server (v1/generate & v1/update)",
+      "label": "FastAPI Server",
       "node_type": "service",
       "complexity": "low",
-      "description": "A RESTful API server exposing endpoints for diagram generation and updates.",
+      "description": "Provides two REST endpoints: POST /v1/generate and POST /v1/update.",
       "metadata": {},
-      "children": []
+      "children": [],
+      "x": null,
+      "y": null
     },
     {
-      "id": "libs-core-pipeline",
-      "label": "Core Library - Pipeline Class",
+      "id": "libs-core-pipeline-class",
+      "label": "Core Pipeline Class",
       "node_type": "generic",
       "complexity": "low",
-      "description": "Sends prompts to LLM providers and converts responses into DIR JSON.",
+      "description": "Sends prompts to LLM providers and parses responses into DIR JSON format.",
       "metadata": {},
-      "children": []
+      "children": [
+        {
+          "id": "llm-anthropic-claude",
+          "label": "LLM Provider - Anthropic Claude",
+          "node_type": "generic",
+          "complexity": "medium",
+          "description": "Provides access to the Claude language model for generating and updating diagrams.",
+          "metadata": {},
+          "children": [],
+          "x": null,
+          "y": null
+        },
+        {
+          "id": "llm-openai-chat",
+          "label": "LLM Provider - OpenAI Chat",
+          "node_type": "generic",
+          "complexity": "medium",
+          "description": "Provides access to the OpenAI language model for generating and updating diagrams.",
+          "metadata": {},
+          "children": [],
+          "x": null,
+          "y": null
+        },
+        {
+          "id": "llm-ollama-local",
+          "label": "LLM Provider - Ollama (Local Model)",
+          "node_type": "generic",
+          "complexity": "medium",
+          "description": "Provides access to a local language model for generating and updating diagrams.",
+          "metadata": {},
+          "children": [],
+          "x": null,
+          "y": null
+        }
+      ],
+      "x": null,
+      "y": null
     },
     {
       "id": "libs-core-renderer",
-      "label": "Core Library - Renderer",
+      "label": "Renderer",
       "node_type": "generic",
-      "complexity": "medium",
-      "description": "Converts DIR JSON into an SVG using BFS topological layout engine.",
+      "complexity": "low",
+      "description": "Converts DIR JSON into semantic SVG using a BFS topological layout engine.",
       "metadata": {},
-      "children": []
-    },
-    {
-      "id": "llm-providers",
-      "label": "Pluggable LLM Providers",
-      "node_type": "generic",
-      "complexity": "high",
-      "description": "Providers for Anthropic Claude, OpenAI, and Ollama.",
-      "metadata": {},
-      "children": []
+      "children": [],
+      "x": null,
+      "y": null
     },
     {
       "id": "libs-svgkit",
       "label": "SVGKit Library",
       "node_type": "generic",
-      "complexity": "medium",
-      "description": "Validates ARIA labels and semantic node IDs in SVG output post-processing stage.",
+      "complexity": "high",
+      "description": "Post-processes generated SVG output by validating ARIA labels and enforcing semantic node IDs.",
       "metadata": {},
-      "children": []
+      "children": [],
+      "x": null,
+      "y": null
     },
     {
-      "id": "apps-cli",
-      "label": "Rust CLI",
-      "node_type": "service",
+      "id": "apps-cli-client",
+      "label": "Rust CLI Client",
+      "node_type": "generic",
       "complexity": "low",
-      "description": "A thin HTTP client over FastAPI server with generate and update subcommands as a single binary.",
+      "description": "A thin HTTP client over the FastAPI server with generate and update subcommands.",
       "metadata": {},
-      "children": []
+      "children": [],
+      "x": null,
+      "y": null
     },
     {
-      "id": "jobs-worker",
-      "label": "ARQ Async Worker (Redis-backed Job Queue)",
+      "id": "jobs-worker-queue",
+      "label": "ARQ Async Worker - Redis Job Queue",
       "node_type": "generic",
-      "complexity": "medium",
-      "description": "Provides asynchronous diagram generation via decoupling of long-running LLM calls from HTTP requests.",
+      "complexity": "low",
+      "description": "Handles asynchronous job processing for diagram generation, decoupling LLM calls from HTTP requests.",
       "metadata": {},
-      "children": []
-    },
-    {
-      "id": "apps-web-editor",
-      "label": "Nuxt 4 Web Editor (planned)",
-      "node_type": "generic",
-      "complexity": "medium",
-      "description": "A planned web-based editor using Nuxt.js Framework for diagram creation and management.",
-      "metadata": {},
-      "children": []
+      "children": [],
+      "x": null,
+      "y": null
     }
   ],
   "edges": [
     {
-      "id": "api-to-core-pipeline",
+      "id": "apis-server-to-libs-core-pipeline-class",
       "from_node": "apis-server",
-      "to_node": "libs-core-pipeline",
-      "label": "Diagram requests from API server to core pipeline",
+      "to_node": "libs-core-pipeline-class",
+      "label": "Request",
       "complexity": "low",
       "style": "solid",
       "direction": "forward"
     },
     {
-      "id": "llm-to-renderer",
-      "from_node": "llm-providers",
-      "to_node": "libs-core-pipeline",
-      "label": "LLM response feeding into DIR JSON creation",
+      "id": "libs-core-renderer-to-libs-svgkit",
+      "from_node": "libs-core-renderer",
+      "to_node": "libs-svgkit",
+      "label": "SVG Output",
       "complexity": "high",
       "style": "solid",
       "direction": "forward"
     },
     {
-      "id": "dir-to-renderer",
-      "from_node": "libs-core-pipeline",
-      "to_node": "libs-core-renderer",
-      "label": "DIR JSON to renderer for SVG creation",
+      "id": "apis-server-to-apps-cli-client",
+      "from_node": "apis-server",
+      "to_node": "apps-cli-client",
+      "label": "HTTP Request/Response",
       "complexity": "low",
-      "style": "solid",
-      "direction": "forward"
-    },
-    {
-      "id": "render-to-postprocess",
-      "from_node": "libs-core-renderer",
-      "to_node": "libs-svgkit",
-      "label": "SVG validation and node ID enforcement by SVGKit",
-      "complexity": "medium",
-      "style": "solid",
-      "direction": "forward"
-    },
-    {
-      "id": "cli-to-api",
-      "from_node": "apps-cli",
-      "to_node": "apis-server",
-      "label": "CLI requests to the FastAPI server endpoints",
-      "complexity": "low",
-      "style": "solid",
-      "direction": "forward"
-    },
-    {
-      "id": "worker-to-redis",
-      "from_node": "jobs-worker",
-      "to_node": "libs-core-renderer",
-      "label": "Async requests managed by ARQ worker feeding into renderer via Redis job queue",
-      "complexity": "medium",
       "style": "dashed",
+      "direction": "bidirectional"
+    },
+    {
+      "id": "libs-core-pipeline-class-to-jobs-worker-queue",
+      "from_node": "libs-core-pipeline-class",
+      "to_node": "jobs-worker-queue",
+      "label": "LLM Job Queue",
+      "complexity": "low",
+      "style": "dotted",
       "direction": "forward"
     }
   ],
   "groups": [
     {
-      "id": "core-components-group",
-      "label": "Core Components of Scheme Weaver",
+      "id": "core-diagram-pipeline-components",
+      "label": "Core Diagram Pipeline Components",
       "complexity": "low",
       "contains": [
         "apis-server",
-        "libs-core-pipeline",
-        "libs-core-renderer",
-        "lib-svgkit",
-        "llm-providers"
-      ],
-      "metadata": {}
-    },
-    {
-      "id": "external-components-group",
-      "label": "External Components of Scheme Weaver",
-      "complexity": "medium",
-      "contains": [
-        "apps-cli",
-        "jobs-worker"
+        "libs-core-pipeline-class",
+        "llm-anthropic-claude",
+        "llm-openai-chat",
+        "llm-ollama-local",
+        "libs-core-renderer"
       ],
       "metadata": {}
     }

@@ -30,7 +30,11 @@ export function useLibrary() {
     try {
       entries.value = await $fetch<DiagramSummary[]>(`${apiBase}/v1/library`)
     } catch (e: unknown) {
-      listError.value = e instanceof Error ? e.message : String(e)
+      const msg = e instanceof Error ? e.message : String(e)
+      // Only show error if it's not a connection reset (dev server restart)
+      if (!msg.includes('ECONNRESET')) {
+        listError.value = msg
+      }
     } finally {
       loadingList.value = false
     }

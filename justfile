@@ -69,7 +69,7 @@ fix:
 # Build CLI binary + web app
 build:
     just build-cli
-    pnpm --filter schemeweaver-web build || true
+    -pnpm --filter schemeweaver-web build
 
 # Build CLI release binary
 build-cli:
