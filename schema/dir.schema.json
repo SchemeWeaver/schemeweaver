@@ -25,10 +25,29 @@
     },
     "NodeType": {
       "type": "string",
+      "description": "Vendor-agnostic semantic category. Determines shape. Use vendor + technology for branding.",
       "enum": [
-        "generic", "service", "database", "queue", "storage", "gateway", "user",
-        "aws.lambda", "aws.s3", "aws.rds", "aws.ec2", "aws.elasticache", "aws.api_gateway"
+        "generic",
+        "user",
+        "service",
+        "api",
+        "gateway",
+        "database",
+        "document-store",
+        "cache",
+        "queue",
+        "stream",
+        "file-store",
+        "search",
+        "cdn",
+        "auth",
+        "monitor"
       ]
+    },
+    "Vendor": {
+      "type": "string",
+      "description": "Cloud or platform vendor. Drives icon branding and stroke color.",
+      "enum": ["aws", "azure", "gcp", "cloudflare", "vercel", "hashicorp"]
     },
     "EdgeStyle":     { "type": "string", "enum": ["solid", "dashed", "dotted"] },
     "EdgeDirection": { "type": "string", "enum": ["forward", "backward", "bidirectional"] },
@@ -53,6 +72,16 @@
         "id":          { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9.]+)*$" },
         "label":       { "type": "string", "minLength": 1 },
         "node_type":   { "$ref": "#/definitions/NodeType", "default": "generic" },
+        "vendor":      {
+          "oneOf": [{ "$ref": "#/definitions/Vendor" }, { "type": "null" }],
+          "description": "Optional vendor for brand-specific rendering (AWS, Azure, GCP, etc.)",
+          "default": null
+        },
+        "technology":  {
+          "type": ["string", "null"],
+          "description": "Optional specific technology or service (e.g. 'rds', 'fastapi', 'redis', 'kafka')",
+          "default": null
+        },
         "description": { "type": "string" },
         "metadata":    { "type": "object", "additionalProperties": true },
         "children":    { "type": "array", "items": { "$ref": "#/definitions/DiagramNode" }, "default": [] },

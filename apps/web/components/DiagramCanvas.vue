@@ -6,6 +6,8 @@ import type { CtxItem } from '~/components/ContextMenu.vue'
 import type { DiagramGroup, DiagramNode, DIR } from '~/types/dir'
 import { shapeKind, labelY, typeTextY, nodeColor } from '~/utils/nodeShapes'
 import type { ShapeKind } from '~/utils/nodeShapes'
+import { getVendorBadge, getTechIcon } from '~/utils/iconRegistry'
+import type { VendorBadge, TechIcon } from '~/utils/iconRegistry'
 
 // ── Layout constants (must match Python layout.py) ─────────────────────────
 const NODE_W = 160
@@ -187,9 +189,29 @@ const edgeMids = computed(() => {
 
 // ── Per-node shape metadata (avoids calling helpers multiple times in template)
 const nodeShapeData = computed(() => {
-  const m: Record<string, { kind: ShapeKind; c: { fill: string; stroke: string }; lY: number; tY: number }> = {}
+  const m: Record<string, {
+    kind: ShapeKind
+    c: { fill: string; stroke: string }
+    lY: number
+    tY: number
+    badge: VendorBadge | null
+    glyph: TechIcon | null
+    typeLabel: string
+  }> = {}
   for (const n of visibleNodes.value) {
-    m[n.id] = { kind: shapeKind(n.node_type), c: nodeColor(n.node_type), lY: labelY(n.node_type), tY: typeTextY(n.node_type) }
+    const vendor = n.vendor ?? null
+    const tech   = n.technology ?? null
+    let typeLabel = tech || n.node_type
+    if (vendor && !tech) typeLabel = `${vendor} · ${n.node_type}`
+    m[n.id] = {
+      kind:      shapeKind(n.node_type),
+      c:         nodeColor(n.node_type, vendor),
+      lY:        labelY(n.node_type),
+      tY:        typeTextY(n.node_type),
+      badge:     getVendorBadge(vendor),
+      glyph:     getTechIcon(tech),
+      typeLabel,
+    }
   }
   return m
 })
@@ -381,9 +403,9 @@ function onDrop(e: DragEvent) {
   isDragOver.value = false; dragDepth = 0
   const raw = e.dataTransfer?.getData('application/x-sw-shape')
   if (!raw) return
-  const { nodeType, label } = JSON.parse(raw) as { nodeType: string; label: string }
+  const { nodeType, label, vendor, technology } = JSON.parse(raw) as { nodeType: string; label: string; vendor?: string; technology?: string }
   const sv = toSvg(e.clientX, e.clientY)
-  const id = addNode(nodeType, label)
+  const id = addNode(nodeType, label, vendor, technology)
   if (id) pos[id] = { x: Math.max(0, sv.x - NODE_W / 2), y: Math.max(0, sv.y - NODE_H / 2) }
 }
 
@@ -698,7 +720,57 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
               :y="nodeShapeData[n.id]?.tY ?? 44"
               text-anchor="middle"
               class="sw-node-type"
-            >{{ n.node_type }}</text>
+            >{{ nodeShapeData[n.id]?.typeLabel ?? n.node_type }}</text>
+
+            <!--
+              Technology glyph — simple-icons SVG path scaled to ~18×18,
+              centred in the top portion of the node.
+              Only rendered when a matching icon exists in the registry.
+            -->
+            <g
+              v-if="nodeShapeData[n.id]?.glyph"
+              :transform="`translate(${NODE_W / 2 - 9}, 3) scale(0.75)`"
+              opacity="0.22"
+              pointer-events="none"
+            >
+              <path :d="nodeShapeData[n.id].glyph!.path" :fill="nodeShapeData[n.id].glyph!.fill"/>
+            </g>
+
+            <!--
+              Vendor badge — top-right corner, 18×18 bounding box.
+              Renders the vendor's simple-icons path on a coloured circle,
+              or falls back to a coloured pill with a short text abbreviation.
+            -->
+            <g
+              v-if="nodeShapeData[n.id]?.badge"
+              :transform="`translate(${NODE_W - 20}, 2)`"
+              pointer-events="none"
+            >
+              <!-- Background circle -->
+              <circle
+                cx="9" cy="9" r="9"
+                :fill="nodeShapeData[n.id].badge!.fill"
+              />
+              <!-- simple-icons path (24×24 → scaled to 18×18 inside circle) -->
+              <g
+                v-if="nodeShapeData[n.id].badge!.iconPath"
+                :transform="`translate(${9 - 9 * 0.75}, ${9 - 9 * 0.75}) scale(0.75)`"
+              >
+                <path
+                  :d="nodeShapeData[n.id].badge!.iconPath"
+                  :fill="nodeShapeData[n.id].badge!.textColor"
+                />
+              </g>
+              <!-- Text fallback (AWS, AZ) when no iconPath -->
+              <text
+                v-else
+                x="9" y="9"
+                dominant-baseline="middle"
+                text-anchor="middle"
+                :fill="nodeShapeData[n.id].badge!.textColor"
+                style="font: bold 5px system-ui, sans-serif;"
+              >{{ nodeShapeData[n.id].badge!.label }}</text>
+            </g>
 
             <!-- Shape-matched selection ring -->
             <template v-if="selected.has(n.id)">

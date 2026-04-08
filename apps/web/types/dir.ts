@@ -7,20 +7,26 @@ export type DiagramType = 'architecture' | 'sequence' | 'er' | 'flowchart' | 'ge
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted'
 export type EdgeDirection = 'forward' | 'backward' | 'bidirectional'
 
+/** Vendor-agnostic semantic category — drives shape selection. */
 export type NodeType =
-  | 'user'
-  | 'gateway'
-  | 'service'
-  | 'database'
-  | 'queue'
-  | 'storage'
   | 'generic'
-  | 'aws.api_gateway'
-  | 'aws.rds'
-  | 'aws.s3'
-  | 'aws.lambda'
-  | 'aws.ec2'
-  | 'aws.elasticache'
+  | 'user'
+  | 'service'
+  | 'api'
+  | 'gateway'
+  | 'database'
+  | 'document-store'
+  | 'cache'
+  | 'queue'
+  | 'stream'
+  | 'file-store'
+  | 'search'
+  | 'cdn'
+  | 'auth'
+  | 'monitor'
+
+/** Cloud / platform vendor — drives icon branding and stroke color. */
+export type Vendor = 'aws' | 'azure' | 'gcp' | 'cloudflare' | 'vercel' | 'hashicorp'
 
 export interface DiagramMeta {
   title: string
@@ -33,6 +39,10 @@ export interface DiagramNode {
   id: string
   label: string
   node_type: NodeType
+  /** Optional vendor for brand-specific rendering. */
+  vendor?: Vendor | null
+  /** Optional specific technology or service (e.g. 'rds', 'fastapi', 'redis'). */
+  technology?: string | null
   description?: string
   metadata?: Record<string, unknown>
   children?: DiagramNode[]

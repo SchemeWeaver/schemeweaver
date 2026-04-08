@@ -62,7 +62,9 @@ DIR schema:
     {
       "id": string,          // kebab-case, semantic (e.g. "api-gateway", not "node-1")
       "label": string,       // human-readable
-      "node_type": "generic" | "service" | "database" | "queue" | "storage" | "gateway" | "user" | "aws.lambda" | "aws.s3" | "aws.rds" | "aws.ec2" | "aws.elasticache" | "aws.api_gateway",
+      "node_type": "generic" | "user" | "service" | "api" | "gateway" | "database" | "document-store" | "cache" | "queue" | "stream" | "file-store" | "search" | "cdn" | "auth" | "monitor",
+      "vendor": "aws" | "azure" | "gcp" | "cloudflare" | "vercel" | "hashicorp" | null,
+      "technology": string | null,  // specific tech/service, e.g. "rds", "fastapi", "redis", "kafka", "lambda", "s3"
       "description": string, // what this component does
       "children": [],        // nested sub-nodes for drill-down
       "metadata": {}
@@ -88,21 +90,51 @@ DIR schema:
   ]
 }
 
+Node type guide:
+- user: human actor or external client
+- service: backend microservice or compute workload (use vendor+technology for specifics, e.g. vendor="aws" technology="lambda")
+- api: HTTP/GraphQL API server (e.g. technology="fastapi" or "django" or "spring-boot")
+- gateway: API gateway, load balancer, reverse proxy (e.g. vendor="aws" technology="api-gateway")
+- database: relational SQL database (e.g. technology="postgres", or vendor="aws" technology="rds")
+- document-store: NoSQL / document database (e.g. technology="mongodb", or vendor="azure" technology="cosmos-db")
+- cache: in-memory cache / key-value store (e.g. technology="redis", or vendor="aws" technology="elasticache")
+- queue: message queue (e.g. technology="rabbitmq", or vendor="aws" technology="sqs")
+- stream: event stream / pub-sub (e.g. technology="kafka", or vendor="gcp" technology="pubsub")
+- file-store: blob / object storage (e.g. vendor="aws" technology="s3")
+- search: search engine / index (e.g. technology="elasticsearch")
+- cdn: content delivery network (e.g. vendor="aws" technology="cloudfront")
+- auth: identity / auth provider (e.g. technology="auth0" or vendor="aws" technology="cognito")
+- monitor: observability, logging, tracing (e.g. technology="datadog" or "prometheus")
+- generic: catch-all for anything that doesn't fit above
+
 Rules:
 - Use descriptive semantic IDs in kebab-case
 - Every node must have a description
+- Set vendor and technology whenever the prompt implies a specific platform or technology
 - Groups should capture meaningful boundaries (VPCs, regions, domains, teams)
-- For architecture diagrams: identify services, their connections, and logical groupings
 - Output ONLY valid JSON. No markdown code fences, no explanation."""
 
 
 _VALID_NODE_TYPES = {
-    "generic", "service", "database", "queue", "storage", "gateway", "user",
-    "aws.lambda", "aws.s3", "aws.rds", "aws.ec2", "aws.elasticache", "aws.api_gateway",
+    "generic", "user", "service", "api", "gateway",
+    "database", "document-store", "cache", "queue", "stream",
+    "file-store", "search", "cdn", "auth", "monitor",
 }
-_VALID_DIAGRAM_TYPES = {"architecture", "flowchart", "erd", "sequence", "generic"}
-_VALID_EDGE_STYLES      = {"solid", "dashed", "dotted"}
-_VALID_EDGE_DIRECTIONS  = {"forward", "backward", "bidirectional"}
+_VALID_VENDORS = {"aws", "azure", "gcp", "cloudflare", "vercel", "hashicorp"}
+_VALID_DIAGRAM_TYPES  = {"architecture", "flowchart", "erd", "sequence", "generic"}
+_VALID_EDGE_STYLES    = {"solid", "dashed", "dotted"}
+_VALID_EDGE_DIRECTIONS = {"forward", "backward", "bidirectional"}
+
+# Migration map: old vendor-prefixed node_type → (new node_type, vendor, technology)
+_LEGACY_NODE_TYPE_MAP: dict[str, tuple[str, str, str]] = {
+    "aws.api_gateway":  ("gateway",    "aws", "api-gateway"),
+    "aws.lambda":       ("service",    "aws", "lambda"),
+    "aws.rds":          ("database",   "aws", "rds"),
+    "aws.s3":           ("file-store", "aws", "s3"),
+    "aws.ec2":          ("service",    "aws", "ec2"),
+    "aws.elasticache":  ("cache",      "aws", "elasticache"),
+    "storage":          ("file-store", None,  None),
+}
 
 
 def _normalize_edges(data: dict) -> dict:
@@ -131,10 +163,27 @@ def _normalize_node(node: dict) -> dict:
     """Fill in missing or invalid fields on a node (and its children recursively)."""
     if "label" not in node:
         node["label"] = node.get("id", "unknown")
-    if node.get("node_type") not in _VALID_NODE_TYPES:
+
+    raw_type = node.get("node_type", "generic")
+
+    # Migrate legacy vendor-prefixed types
+    if raw_type in _LEGACY_NODE_TYPE_MAP:
+        new_type, vendor, tech = _LEGACY_NODE_TYPE_MAP[raw_type]
+        node["node_type"] = new_type
+        if vendor and not node.get("vendor"):
+            node["vendor"] = vendor
+        if tech and not node.get("technology"):
+            node["technology"] = tech
+    elif raw_type not in _VALID_NODE_TYPES:
         node["node_type"] = "generic"
+
+    # Coerce invalid vendor values
+    if node.get("vendor") not in _VALID_VENDORS:
+        node["vendor"] = None
+
     # Strip any stale complexity field the model may still emit
     node.pop("complexity", None)
+
     for child in node.get("children", []):
         _normalize_node(child)
     return node
@@ -143,9 +192,8 @@ def _normalize_node(node: dict) -> dict:
 def _normalize_nodes(data: dict) -> dict:
     for node in data.get("nodes", []):
         _normalize_node(node)
-    # Strip stale top-level complexity_levels if present
+    # Strip stale top-level fields
     data.pop("complexity_levels", None)
-    # Strip complexity from edges and groups
     for edge in data.get("edges", []):
         edge.pop("complexity", None)
     for group in data.get("groups", []):

@@ -7,6 +7,7 @@ from schemeweaver_core.models.dir import (
     DiagramEdge,
     DiagramGroup,
     NodeType,
+    Vendor,
     DiagramType,
 )
 from schemeweaver_core.renderer import Renderer
@@ -17,9 +18,9 @@ def sample_dir():
     return DIR(
         meta=DiagramMeta(title="Test Architecture", diagram_type=DiagramType.ARCHITECTURE),
         nodes=[
-            DiagramNode(id="api-gateway",  label="API Gateway", node_type=NodeType.GATEWAY,     description="Entry point"),
-            DiagramNode(id="lambda-auth",  label="Auth Lambda",  node_type=NodeType.AWS_LAMBDA,  description="Auth handler"),
-            DiagramNode(id="rds-primary",  label="RDS Primary",  node_type=NodeType.AWS_RDS,     description="Main database"),
+            DiagramNode(id="api-gateway",  label="API Gateway", node_type=NodeType.GATEWAY,  vendor=Vendor.AWS, technology="api-gateway", description="Entry point"),
+            DiagramNode(id="lambda-auth",  label="Auth Lambda",  node_type=NodeType.SERVICE,  vendor=Vendor.AWS, technology="lambda",      description="Auth handler"),
+            DiagramNode(id="rds-primary",  label="RDS Primary",  node_type=NodeType.DATABASE, vendor=Vendor.AWS, technology="rds",         description="Main database"),
         ],
         edges=[
             DiagramEdge(**{"id": "e-gw-lambda",  "from": "api-gateway", "to": "lambda-auth", "label": "routes"}),
@@ -78,4 +79,18 @@ def test_render_arrowhead_marker(sample_dir):
 def test_render_node_type_attributes(sample_dir):
     svg = Renderer().render(sample_dir)
     assert 'data-node-type="gateway"' in svg
-    assert 'data-node-type="aws.lambda"' in svg
+    assert 'data-node-type="service"' in svg
+    assert 'data-vendor="aws"' in svg
+
+
+def test_render_vendor_stroke(sample_dir):
+    """AWS nodes must use the AWS orange stroke color."""
+    svg = Renderer().render(sample_dir)
+    assert "#FF9900" in svg
+
+
+def test_render_type_label_shows_technology(sample_dir):
+    """Type text should show technology when set."""
+    svg = Renderer().render(sample_dir)
+    assert "api-gateway" in svg
+    assert "lambda" in svg

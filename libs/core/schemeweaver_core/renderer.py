@@ -6,43 +6,60 @@ from .layout import compute_layout, Layout, LayoutNode, NODE_W, NODE_H
 _SW_NS = "https://schemeweaver.dev/ns/1.0"
 ET.register_namespace("sw", _SW_NS)
 
-# Fill colors by node type category
+# Fill colors by generic node type
 NODE_COLORS: dict[str, str] = {
-    "user":             "#e8f4f8",
-    "gateway":          "#fff3cd",
-    "aws.api_gateway":  "#fff3cd",
-    "service":          "#f0f4ff",
-    "generic":          "#f5f5f5",
-    "database":         "#d4edda",
-    "aws.rds":          "#d4edda",
-    "queue":            "#fde8e8",
-    "storage":          "#e2d9f3",
-    "aws.s3":           "#e2d9f3",
-    "aws.lambda":       "#f0f4ff",
-    "aws.ec2":          "#f5f5f5",
-    "aws.elasticache":  "#fde8e8",
+    "user":           "#e8f4f8",
+    "service":        "#f0f4ff",
+    "api":            "#eef2ff",
+    "gateway":        "#fff3cd",
+    "database":       "#d4edda",
+    "document-store": "#d4edda",
+    "cache":          "#fde8e8",
+    "queue":          "#fef3e2",
+    "stream":         "#fef3e2",
+    "file-store":     "#e2d9f3",
+    "search":         "#e2d9f3",
+    "cdn":            "#e8f8f5",
+    "auth":           "#fce8ff",
+    "monitor":        "#f0f0f0",
+    "generic":        "#f5f5f5",
 }
 
+# Default stroke colors by generic node type
 NODE_STROKE_COLORS: dict[str, str] = {
-    "user":             "#5bc0de",
-    "gateway":          "#f0ad4e",
-    "aws.api_gateway":  "#f0ad4e",
-    "service":          "#6c8ebf",
-    "generic":          "#aaaaaa",
-    "database":         "#5cb85c",
-    "aws.rds":          "#5cb85c",
-    "queue":            "#d9534f",
-    "storage":          "#9b59b6",
-    "aws.s3":           "#9b59b6",
-    "aws.lambda":       "#6c8ebf",
-    "aws.ec2":          "#aaaaaa",
-    "aws.elasticache":  "#d9534f",
+    "user":           "#5bc0de",
+    "service":        "#6c8ebf",
+    "api":            "#6c8ebf",
+    "gateway":        "#f0ad4e",
+    "database":       "#5cb85c",
+    "document-store": "#5cb85c",
+    "cache":          "#d9534f",
+    "queue":          "#e8963a",
+    "stream":         "#e8963a",
+    "file-store":     "#9b59b6",
+    "search":         "#9b59b6",
+    "cdn":            "#1abc9c",
+    "auth":           "#c039e0",
+    "monitor":        "#7f8c8d",
+    "generic":        "#aaaaaa",
+}
+
+# Vendor brand stroke colors (override node-type stroke when vendor is set)
+VENDOR_STROKE_COLORS: dict[str, str] = {
+    "aws":        "#FF9900",
+    "azure":      "#0078D4",
+    "gcp":        "#4285F4",
+    "cloudflare": "#F38020",
+    "vercel":     "#000000",
+    "hashicorp":  "#7B42BC",
 }
 
 
-def _get_color(node_type: str) -> tuple[str, str]:
+def _get_color(node_type: str, vendor: str | None = None) -> tuple[str, str]:
     fill   = NODE_COLORS.get(node_type, "#f5f5f5")
-    stroke = NODE_STROKE_COLORS.get(node_type, "#aaaaaa")
+    stroke = VENDOR_STROKE_COLORS.get(vendor, None) if vendor else None
+    if stroke is None:
+        stroke = NODE_STROKE_COLORS.get(node_type, "#aaaaaa")
     return fill, stroke
 
 
@@ -152,15 +169,22 @@ class Renderer:
 """
 
     def _render_node(self, parent: ET.Element, node: DiagramNode, lnode: LayoutNode) -> None:
-        fill, stroke = _get_color(node.node_type.value)
+        vendor_val = node.vendor.value if node.vendor else None
+        fill, stroke = _get_color(node.node_type.value, vendor_val)
 
-        g = ET.SubElement(parent, "g", {
-            "id":            f"node-{node.id}",
-            "class":         "sw-node",
+        attrs: dict[str, str] = {
+            "id":             f"node-{node.id}",
+            "class":          "sw-node",
             "data-node-type": node.node_type.value,
-            "aria-label":    f"{node.label}: {node.description or ''}",
-            "role":          "group",
-        })
+            "aria-label":     f"{node.label}: {node.description or ''}",
+            "role":           "group",
+        }
+        if vendor_val:
+            attrs["data-vendor"] = vendor_val
+        if node.technology:
+            attrs["data-technology"] = node.technology
+
+        g = ET.SubElement(parent, "g", attrs)
 
         ET.SubElement(g, "rect", {
             "x": str(lnode.x), "y": str(lnode.y),
@@ -181,7 +205,10 @@ class Renderer:
             "x": str(cx), "y": str(lnode.y + lnode.height / 2 + 14),
             "text-anchor": "middle", "class": "sw-node-type",
         })
-        type_el.text = node.node_type.value
+        type_label = node.technology or node.node_type.value
+        if vendor_val:
+            type_label = f"{vendor_val} · {type_label}"
+        type_el.text = type_label
 
     def _render_edge(self, parent: ET.Element, edge: DiagramEdge, layout: Layout) -> None:
         from_lnode = layout.nodes.get(edge.from_node)

@@ -203,11 +203,18 @@ export function useSystem() {
 
   // ── Canvas mutations (mirror useDiagram API) ─────────────────────────────
 
-  function addNode(nodeType: string, label: string): string | null {
+  function addNode(nodeType: string, label: string, vendor?: string | null, technology?: string | null): string | null {
     if (!dir.value) return null
-    const id = `${nodeType.replace(/\./g, '-')}-${Date.now()}`
+    const id = `${nodeType.replace(/[^a-z0-9]/g, '-')}-${Date.now()}`
     _mutateActiveDir(d => {
-      d.nodes.push({ id, label, node_type: nodeType as DiagramNode['node_type'], children: [] })
+      d.nodes.push({
+        id,
+        label,
+        node_type: nodeType as DiagramNode['node_type'],
+        vendor: (vendor ?? null) as DiagramNode['vendor'],
+        technology: technology ?? null,
+        children: [],
+      })
     })
     return id
   }

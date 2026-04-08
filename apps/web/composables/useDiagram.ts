@@ -88,13 +88,15 @@ export function useDiagram() {
     }
   }
 
-  function addNode(nodeType: string, label: string): string | null {
+  function addNode(nodeType: string, label: string, vendor?: string | null, technology?: string | null): string | null {
     if (!dir.value) return null
-    const id = `${nodeType.replace(/\./g, '-')}-${Date.now()}`
+    const id = `${nodeType.replace(/[^a-z0-9]/g, '-')}-${Date.now()}`
     dir.value.nodes.push({
       id,
       label,
       node_type: nodeType as NodeType,
+      vendor: (vendor ?? null) as DiagramNode['vendor'],
+      technology: technology ?? null,
       children: [],
     })
     return id

@@ -13,30 +13,41 @@ class DiagramType(str, Enum):
 
 
 class NodeType(str, Enum):
-    GENERIC = "generic"
-    SERVICE = "service"
-    DATABASE = "database"
-    QUEUE = "queue"
-    STORAGE = "storage"
-    GATEWAY = "gateway"
-    USER = "user"
-    AWS_LAMBDA = "aws.lambda"
-    AWS_S3 = "aws.s3"
-    AWS_RDS = "aws.rds"
-    AWS_EC2 = "aws.ec2"
-    AWS_ELASTICACHE = "aws.elasticache"
-    AWS_API_GATEWAY = "aws.api_gateway"
+    GENERIC        = "generic"
+    USER           = "user"
+    SERVICE        = "service"
+    API            = "api"
+    GATEWAY        = "gateway"
+    DATABASE       = "database"
+    DOCUMENT_STORE = "document-store"
+    CACHE          = "cache"
+    QUEUE          = "queue"
+    STREAM         = "stream"
+    FILE_STORE     = "file-store"
+    SEARCH         = "search"
+    CDN            = "cdn"
+    AUTH           = "auth"
+    MONITOR        = "monitor"
+
+
+class Vendor(str, Enum):
+    AWS        = "aws"
+    AZURE      = "azure"
+    GCP        = "gcp"
+    CLOUDFLARE = "cloudflare"
+    VERCEL     = "vercel"
+    HASHICORP  = "hashicorp"
 
 
 class EdgeStyle(str, Enum):
-    SOLID = "solid"
+    SOLID  = "solid"
     DASHED = "dashed"
     DOTTED = "dotted"
 
 
 class EdgeDirection(str, Enum):
-    FORWARD = "forward"
-    BACKWARD = "backward"
+    FORWARD       = "forward"
+    BACKWARD      = "backward"
     BIDIRECTIONAL = "bidirectional"
 
 
@@ -53,6 +64,8 @@ class DiagramNode(BaseModel):
     id: str
     label: str
     node_type: NodeType = NodeType.GENERIC
+    vendor: Optional[Vendor] = None
+    technology: Optional[str] = None
     description: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     children: list["DiagramNode"] = Field(default_factory=list)
