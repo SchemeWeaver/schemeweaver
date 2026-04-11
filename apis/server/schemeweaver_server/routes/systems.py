@@ -433,8 +433,122 @@ def append_log(slug: str, req: LogActionRequest):
     return {"entry_id": entry.id}
 
 
+class FromRepoRequest(BaseModel):
+    source: str                   # local path or git URL
+    knowledge_base: Optional[str] = None  # pre-compiled KB markdown (from /repos/analyze)
+    model: Optional[str] = None
+
+
+@router.post("/systems/from-repo", response_model=GenerateSystemResponse)
+async def generate_system_from_repo(req: FromRepoRequest):
+    """Analyze a repo (or use a pre-compiled KB) and generate a System.
+
+    Two-step flow:
+      1. Call POST /repos/analyze → get knowledge_base markdown, review/edit it
+      2. Call this endpoint with the (modified) knowledge_base to generate the System
+
+    Single-step flow:
+      Pass only `source` — the server will analyze + generate in one call.
+    """
+    import asyncio
+    from schemeweaver_core.repo_analyzer import RepoAnalyzer
+
+    log.info("generate_system_from_repo  source=%r", req.source[:120])
+
+    # Compile or use provided KB
+    kb_markdown = req.knowledge_base
+    if not kb_markdown:
+        try:
+            kb = RepoAnalyzer().analyze(req.source)
+            kb_markdown = kb.to_markdown()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception:
+            log.exception("generate_system_from_repo  analysis error")
+            raise HTTPException(status_code=500, detail="Repo analysis failed — see server logs")
+
+    # Generate System from KB
+    loop = asyncio.get_event_loop()
+    try:
+        pipeline = _build_pipeline(req.model)
+        system = await loop.run_in_executor(None, pipeline.generate_from_kb, kb_markdown)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("generate_system_from_repo  generation error")
+        raise HTTPException(status_code=500, detail="System generation failed — see server logs")
+
+    slug = _unique_slug(_slugify(system.name))
+    system = system.model_copy(update={"slug": slug})
+    _save_system(system, slug)
+
+    # Save knowledge_base.md alongside system.json
+    kb_path = _system_path(slug) / "knowledge_base.md"
+    kb_path.write_text(kb_markdown, encoding="utf-8")
+    log.info("generate_system_from_repo  slug=%s  entities=%d", slug, len(system.ontology.entities))
+
+    return GenerateSystemResponse(slug=slug, system=json.loads(system.model_dump_json()))
+
+
 class SyncModelRequest(BaseModel):
     model: Optional[str] = None
+
+
+@router.post("/systems/{slug}/sync/kb-to-ontology")
+async def sync_kb_to_ontology(slug: str, req: SyncModelRequest):
+    """Re-derive the ontology from the saved knowledge_base.md (AI).
+
+    Loads knowledge_base.md for the system and re-runs the KB pipeline.
+    Returns a proposed ontology without saving — caller decides to apply
+    (same pattern as prose-to-ontology).
+    """
+    import asyncio
+
+    system = _load_system(slug)
+    kb_path = _system_path(slug) / "knowledge_base.md"
+    if not kb_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"No knowledge_base.md found for system '{slug}'. "
+                   "Import the system via POST /systems/from-repo to create one.",
+        )
+
+    kb_markdown = kb_path.read_text(encoding="utf-8")
+
+    loop = asyncio.get_event_loop()
+    try:
+        pipeline = _build_pipeline(req.model)
+        new_system = await loop.run_in_executor(None, pipeline.generate_from_kb, kb_markdown)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("sync_kb_to_ontology  slug=%s", slug)
+        raise HTTPException(status_code=500, detail="Sync failed — see server logs")
+
+    return {"ontology": json.loads(new_system.ontology.model_dump_json())}
+
+
+@router.get("/systems/{slug}/knowledge-base")
+def get_knowledge_base(slug: str):
+    """Return the saved knowledge_base.md for a system, if it exists."""
+    _load_system(slug)  # validate slug exists
+    kb_path = _system_path(slug) / "knowledge_base.md"
+    if not kb_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"No knowledge_base.md found for system '{slug}'.",
+        )
+    return {"knowledge_base": kb_path.read_text(encoding="utf-8")}
+
+
+@router.put("/systems/{slug}/knowledge-base")
+def update_knowledge_base(slug: str, body: dict):
+    """Save an updated knowledge_base.md for a system."""
+    _load_system(slug)  # validate slug exists
+    kb_markdown = body.get("knowledge_base", "")
+    kb_path = _system_path(slug) / "knowledge_base.md"
+    kb_path.write_text(kb_markdown, encoding="utf-8")
+    return {"ok": True}
 
 
 @router.post("/systems/{slug}/sync/view-to-prose")

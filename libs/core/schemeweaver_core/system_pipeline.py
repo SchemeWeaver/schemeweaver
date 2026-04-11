@@ -25,6 +25,47 @@ _VALID_REL_TYPES        = {r.value for r in RelationshipType}
 _VALID_ENTITY_STATUSES  = {s.value for s in EntityStatus}
 
 
+KB_SYSTEM_PROMPT = """You are a software architecture analyst. You are given a structured knowledge base compiled from a real codebase.
+Extract the architecture and produce a System JSON representation.
+Focus on actual services, databases, queues, gateways, and their relationships found in the knowledge base.
+Map manifest services → entities, docker compose services → entities, dependencies like Redis/Postgres/RabbitMQ → database/queue entities.
+Output ONLY this JSON structure (no markdown, no explanation):
+
+{
+  "name": string,
+  "prose": string,           // 2-4 sentence plain-English summary derived from the knowledge base
+  "ontology": {
+    "entities": [
+      {
+        "id": string,        // kebab-case, unique, semantic (e.g. "payment-service")
+        "name": string,
+        "type": "service" | "database" | "queue" | "storage" | "gateway" | "user" | "team" | "concept" | "data_entity" | "external_system" | "other",
+        "description": string,
+        "domain": string,
+        "status": "active" | "deprecated" | "planned",
+        "tags": [string]
+      }
+    ],
+    "relationships": [
+      {
+        "id": string,
+        "from_entity": string,
+        "to_entity": string,
+        "type": "calls" | "owns" | "depends_on" | "publishes" | "subscribes_to" | "stores_in" | "managed_by" | "other",
+        "description": string
+      }
+    ]
+  }
+}
+
+Rules:
+- Every entity needs a unique kebab-case id
+- Every relationship needs a unique kebab-case id
+- Infer relationships from dependencies (e.g. a service that depends on Postgres "stores_in" a database entity)
+- Group components into logical domains based on manifest paths or naming
+- Output ONLY valid JSON"""
+
+
 SYSTEM_PROMPT = """You are a software architecture analyst. Given a description of a system, produce a structured System representation as JSON.
 
 Output ONLY this JSON structure (no markdown, no explanation):
@@ -162,6 +203,47 @@ class SystemPipeline:
             id="view-overview",
             name="Overview",
             description="Full system overview derived from ontology",
+            diagram_type=SystemDiagramType.ARCHITECTURE,
+            scope=ViewScope(),
+            dir=default_dir,
+            created_at=now,
+            updated_at=now,
+        )
+
+        return System(
+            id=system_id,
+            slug=slug,
+            name=name,
+            prose=prose,
+            ontology=ontology,
+            views=[default_view],
+            log=[],
+            created_at=now,
+            updated_at=now,
+        )
+
+    def generate_from_kb(self, kb_markdown: str) -> System:
+        """Generate a full System from a pre-compiled Knowledge Base markdown string."""
+        raw = self.provider.complete(KB_SYSTEM_PROMPT, kb_markdown)
+        data = json.loads(_extract_json(raw))
+
+        name = data.get("name", "Untitled System")
+        prose = data.get("prose", "")
+        ontology = _parse_ontology(data)
+
+        slug = _slugify(name)
+        system_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+
+        default_dir = ontology_to_dir(
+            ontology,
+            title=f"{name} — Overview",
+            diagram_type=DiagramType.ARCHITECTURE,
+        )
+        default_view = View(
+            id="view-overview",
+            name="Overview",
+            description="Full system overview derived from knowledge base",
             diagram_type=SystemDiagramType.ARCHITECTURE,
             scope=ViewScope(),
             dir=default_dir,

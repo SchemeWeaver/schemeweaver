@@ -6,6 +6,8 @@ const props = defineProps<{ onLoad: (slug: string) => Promise<void> }>()
 
 const { systems, loadingList, listError, currentSystem, fetchList, migrateLibrary } = useSystem()
 
+const showRepoImport = ref(false)
+
 const loadingSlug   = ref<string | null>(null)
 const migrating     = ref(false)
 const migrateResult = ref<string | null>(null)
@@ -49,6 +51,16 @@ onMounted(() => {
       <div class="library__header-actions">
         <button
           class="library__action-btn"
+          title="Import from repository"
+          @click="showRepoImport = true"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <path d="M2 2h4v4H2zM10 2h4v4h-4zM2 10h4v4H2zM10 10h4v4h-4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            <path d="M6 4h4M4 6v4M12 6v4M6 12h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button
+          class="library__action-btn"
           title="Refresh"
           :disabled="loadingList"
           @click="fetchList"
@@ -65,6 +77,12 @@ onMounted(() => {
         </button>
       </div>
     </div>
+
+    <RepoImportDialog
+      v-if="showRepoImport"
+      :on-load="props.onLoad"
+      @close="showRepoImport = false; fetchList()"
+    />
 
     <div class="library__body">
       <!-- Loading skeleton -->
