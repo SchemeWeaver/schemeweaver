@@ -4,7 +4,7 @@ import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import generate, health, library, systems
+from .routes import generate, health, library, repos, systems
 
 # ── Logging setup ──────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -46,3 +46,4 @@ app.include_router(health.router)
 app.include_router(generate.router, prefix="/v1")
 app.include_router(library.router, prefix="/v1")
 app.include_router(systems.router, prefix="/v1")
+app.include_router(repos.router, prefix="/v1")
