@@ -25,7 +25,7 @@ _ENTITY_TO_NODE_TYPE: dict[EntityType, NodeType] = {
     EntityType.SERVICE:         NodeType.SERVICE,
     EntityType.DATABASE:        NodeType.DATABASE,
     EntityType.QUEUE:           NodeType.QUEUE,
-    EntityType.STORAGE:         NodeType.STORAGE,
+    EntityType.STORAGE:         NodeType.FILE_STORE,
     EntityType.GATEWAY:         NodeType.GATEWAY,
     EntityType.USER:            NodeType.USER,
     EntityType.TEAM:            NodeType.GENERIC,

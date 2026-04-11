@@ -208,6 +208,7 @@ __marimo__/
 
 .claude/settings.local.json
 .claude/CLAUDE.local.md
+.claude/worktrees
 .idea/
 data/
 node_modules/

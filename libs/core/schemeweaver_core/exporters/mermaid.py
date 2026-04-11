@@ -4,19 +4,21 @@ from ..models.dir import DIR, DiagramNode, NodeType
 
 # Mermaid shape syntax by node_type
 _NODE_SHAPES: dict[str, tuple[str, str]] = {
-    NodeType.USER:             ("([", "])"),   # stadium/pill
-    NodeType.GATEWAY:          ("[/", "\\]"),  # parallelogram
-    NodeType.AWS_API_GATEWAY:  ("[/", "\\]"),
-    NodeType.DATABASE:         ("[(", ")]"),   # cylinder
-    NodeType.AWS_RDS:          ("[(", ")]"),
-    NodeType.AWS_ELASTICACHE:  ("[(", ")]"),
-    NodeType.STORAGE:          ("[(", ")]"),
-    NodeType.AWS_S3:           ("[(", ")]"),
-    NodeType.QUEUE:            (">", "]"),     # flag/asymmetric
-    NodeType.SERVICE:          ("[", "]"),     # rectangle
-    NodeType.AWS_LAMBDA:       ("[", "]"),
-    NodeType.AWS_EC2:          ("[", "]"),
-    NodeType.GENERIC:          ("[", "]"),
+    NodeType.USER:          ("([", "])"),   # stadium/pill
+    NodeType.GATEWAY:       ("[/", "\\]"),  # parallelogram
+    NodeType.API:           ("[/", "\\]"),
+    NodeType.DATABASE:      ("[(", ")]"),   # cylinder
+    NodeType.DOCUMENT_STORE:("[(", ")]"),
+    NodeType.CACHE:         ("[(", ")]"),
+    NodeType.FILE_STORE:    ("[(", ")]"),
+    NodeType.QUEUE:         (">", "]"),     # flag/asymmetric
+    NodeType.STREAM:        (">", "]"),
+    NodeType.SERVICE:       ("[", "]"),     # rectangle
+    NodeType.SEARCH:        ("[", "]"),
+    NodeType.CDN:           ("[", "]"),
+    NodeType.AUTH:          ("[", "]"),
+    NodeType.MONITOR:       ("[", "]"),
+    NodeType.GENERIC:       ("[", "]"),
 }
 
 # Arrow syntax by (style, direction)
