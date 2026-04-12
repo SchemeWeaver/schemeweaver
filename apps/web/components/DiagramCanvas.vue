@@ -3,83 +3,20 @@ import { useSystem } from '~/composables/useSystem'
 import { useTool } from '~/composables/useTool'
 import ContextMenu from '~/components/ContextMenu.vue'
 import type { CtxItem } from '~/components/ContextMenu.vue'
-import type { DiagramGroup, DiagramNode, DIR } from '~/types/dir'
+import type { DiagramEdge, DiagramGroup, DiagramNode, DIR } from '~/types/dir'
 import { shapeKind, labelY, typeTextY, nodeColor } from '~/utils/nodeShapes'
 import type { ShapeKind } from '~/utils/nodeShapes'
 import { getVendorBadge, getTechIcon } from '~/utils/iconRegistry'
 import type { VendorBadge, TechIcon } from '~/utils/iconRegistry'
+import { autoLayout } from '~/utils/layout'
 
 // ── Layout constants (must match Python layout.py) ─────────────────────────
 const NODE_W = 160
 const NODE_H = 60
-const H_GAP  = 80
-const V_GAP  = 100
 const PAD    = 80
 
-// ── Layout engine (mirrors Python BFS layering in layout.py) ──────────────
-function autoLayout(d: DIR): Record<string, { x: number; y: number }> {
-  const childIds = new Set<string>()
-  const walk = (nodes: DiagramNode[]) => {
-    for (const n of nodes) {
-      for (const c of n.children ?? []) { childIds.add(c.id); walk([c]) }
-    }
-  }
-  walk(d.nodes)
-
-  const top = d.nodes.filter(n => !childIds.has(n.id))
-  if (!top.length) return {}
-
-  const ids  = top.map(n => n.id)
-  const set  = new Set(ids)
-  const inDeg: Record<string, number> = Object.fromEntries(ids.map(id => [id, 0]))
-  const adj:   Record<string, string[]> = Object.fromEntries(ids.map(id => [id, []]))
-
-  for (const e of d.edges) {
-    if (set.has(e.from_node) && set.has(e.to_node)) {
-      adj[e.from_node].push(e.to_node)
-      inDeg[e.to_node]++
-    }
-  }
-
-  // Kahn's BFS layering
-  const q = ids.filter(id => !inDeg[id])
-  const layers: string[][] = []
-  const seen = new Set<string>()
-  while (q.length) {
-    const layer: string[] = []
-    for (let n = q.length; n > 0; n--) {
-      const id = q.shift()!
-      if (seen.has(id)) continue
-      seen.add(id); layer.push(id)
-      for (const nb of adj[id]) if (!--inDeg[nb]) q.push(nb)
-    }
-    if (layer.length) layers.push(layer)
-  }
-  const leftover = ids.filter(id => !seen.has(id))
-  if (leftover.length) layers.push(leftover)
-
-  // First-pass x (temporary)
-  const result: Record<string, { x: number; y: number }> = {}
-  let y = PAD; let maxW = 0
-  for (const layer of layers) {
-    const w = layer.length * NODE_W + (layer.length - 1) * H_GAP
-    maxW = Math.max(maxW, w)
-    layer.forEach((id, i) => { result[id] = { x: PAD + i * (NODE_W + H_GAP), y } })
-    y += NODE_H + V_GAP
-  }
-
-  // Center each layer
-  const cW = Math.max(maxW + 2 * PAD, 800)
-  for (const layer of layers) {
-    const w = layer.length * NODE_W + (layer.length - 1) * H_GAP
-    const x0 = (cW - w) / 2
-    layer.forEach((id, i) => { result[id].x = x0 + i * (NODE_W + H_GAP) })
-  }
-  return result
-}
-
 // ── Composable ─────────────────────────────────────────────────────────────
-const { dir, updateNodePosition, addNode, addEdge, deleteNode, deleteEdge, updateNode, updateEdge } = useSystem()
+const { dir, layoutResetToken, updateNodePosition, addNode, addEdge, deleteNode, deleteEdge, updateNode, updateEdge } = useSystem()
 const { tool } = useTool()
 
 // ── Node positions (reactive, keyed by node id) ────────────────────────────
@@ -88,20 +25,89 @@ const pos = reactive<Record<string, { x: number; y: number }>>({})
 // ── Selection ──────────────────────────────────────────────────────────────
 const selected = reactive(new Set<string>())
 
+// ── Structural fingerprint ─────────────────────────────────────────────────
+// Encodes only node/edge/group identity — NOT positions or metadata.
+// Layout re-runs only when this changes, so dragging a node (which updates
+// node.x/node.y inside dir) never triggers a re-layout.
+const _structuralKey = computed(() => {
+  const d = dir.value
+  if (!d) return ''
+  return [
+    d.nodes.map(n => n.id).sort().join(','),
+    d.edges.map(e => e.id).sort().join(','),
+    d.groups.map(g => g.id).sort().join(','),
+  ].join('|')
+})
+
 watch(
-  dir,
-  (d) => {
-    selected.clear()
-    for (const k of Object.keys(pos)) delete pos[k]
-    if (!d) return
-    const computed = autoLayout(d)
-    for (const node of d.nodes) {
-      // Prefer stored positions from a previous save/load
-      pos[node.id] = (node.x != null && node.y != null)
-        ? { x: node.x, y: node.y }
-        : computed[node.id] ?? { x: PAD, y: PAD }
+  _structuralKey,
+  (newKey, oldKey) => {
+    const d = dir.value
+    if (!d || !newKey) {
+      selected.clear()
+      for (const k of Object.keys(pos)) delete pos[k]
+      return
     }
-    nextTick(fitView)
+
+    const nodeIds = new Set(d.nodes.map(n => n.id))
+
+    // Drop positions for nodes that no longer exist
+    for (const k of Object.keys(pos)) {
+      if (!nodeIds.has(k)) delete pos[k]
+    }
+
+    // Decide: fresh diagram (view switch) vs incremental structural change
+    // (node/edge added or removed from an existing layout).
+    // If fewer than half the new nodes already have positions, treat as fresh.
+    const retained = Object.keys(pos).filter(id => nodeIds.has(id)).length
+    const isFresh  = retained === 0 || (d.nodes.length > 2 && retained / d.nodes.length < 0.5)
+
+    if (isFresh) {
+      // ── Full reset: new diagram or view switch ──────────────────────────
+      selected.clear()
+      for (const k of Object.keys(pos)) delete pos[k]
+
+      // Nodes may carry persisted x/y from a previous save — use as seed
+      const storedPos: Record<string, { x: number; y: number }> = {}
+      for (const node of d.nodes) {
+        if (node.x != null && node.y != null) storedPos[node.id] = { x: node.x, y: node.y }
+      }
+
+      const layout = autoLayout(
+        d,
+        Object.keys(storedPos).length ? storedPos : undefined,
+        { nodeW: NODE_W, nodeH: NODE_H },
+      )
+      for (const node of d.nodes) {
+        pos[node.id] = layout[node.id] ?? { x: PAD, y: PAD }
+      }
+      nextTick(fitView)
+    } else {
+      // ── Incremental: node/edge added or removed ─────────────────────────
+      // Keep every position that's already in `pos`; only compute placement
+      // for genuinely new nodes.  Don't call fitView — preserve the viewport.
+
+      // Seed the optimizer with current screen positions (authoritative)
+      const storedPos: Record<string, { x: number; y: number }> = {}
+      for (const [id, p] of Object.entries(pos)) {
+        if (nodeIds.has(id)) storedPos[id] = { ...p }
+      }
+      // Also pick up any new nodes that already carry saved coordinates
+      for (const node of d.nodes) {
+        if (!storedPos[node.id] && node.x != null && node.y != null) {
+          storedPos[node.id] = { x: node.x, y: node.y }
+        }
+      }
+
+      const layout = autoLayout(d, storedPos, { nodeW: NODE_W, nodeH: NODE_H })
+
+      // Write back only nodes that don't already have a position
+      for (const node of d.nodes) {
+        if (!pos[node.id]) {
+          pos[node.id] = layout[node.id] ?? { x: PAD, y: PAD }
+        }
+      }
+    }
   },
   { immediate: true },
 )
@@ -112,6 +118,111 @@ const visibleEdges  = computed(() => (dir.value?.edges ?? []).filter(
   e => visibleIds.value.has(e.from_node) && visibleIds.value.has(e.to_node),
 ))
 const visibleGroups = computed(() => dir.value?.groups ?? [])
+
+// ── Display edges — collapses parallel edges between any (group|node) pair ───
+//
+// Two collapsing rules, handled in one unified pass:
+//
+//  Inbound:  one external node/group → 2+ members of the same group
+//            collapses to:  external → group
+//
+//  Outbound: 2+ members of the same group → the same external node/group
+//            collapses to:  group → external
+//
+// Both rules work by mapping each edge endpoint to its "effective container"
+// (the group ID if the node belongs to a group, the node ID otherwise) then
+// bucketing by (effectiveFrom, effectiveTo).  Any bucket with 2+ raw edges
+// becomes a single synthetic DisplayEdge.  Intra-group edges (same container
+// on both sides) are always passed through unchanged.
+
+interface DisplayEdge {
+  id: string
+  /** Representative from-node; used for routing when from_group_id is absent. */
+  from_node: string
+  /** Set when the source side was collapsed to a group (outbound rule). */
+  from_group_id?: string
+  /** Set for edges terminating at a plain node. */
+  to_node?: string
+  /** Set when the target side was collapsed to a group (inbound rule). */
+  to_group_id?: string
+  style: DiagramEdge['style']
+  direction: DiagramEdge['direction']
+  label?: string
+  description?: string
+  /** Number of original edges merged into this one (1 = not collapsed). */
+  collapsedCount: number
+}
+
+const displayEdges = computed((): DisplayEdge[] => {
+  const edges  = visibleEdges.value
+  const groups = visibleGroups.value
+
+  // Lookups
+  const nodeToGroup = new Map<string, string>()
+  const groupIds    = new Set<string>()
+  for (const g of groups) {
+    groupIds.add(g.id)
+    for (const nid of g.contains) nodeToGroup.set(nid, g.id)
+  }
+
+  // Effective container: group ID if node is a member, else the node ID itself
+  const eff = (nodeId: string) => nodeToGroup.get(nodeId) ?? nodeId
+
+  // Bucket all cross-container edges by (effectiveFrom, effectiveTo).
+  // Intra-container edges (effectiveFrom === effectiveTo) skip bucketing —
+  // they are always passed through as-is.
+  const buckets = new Map<string, DiagramEdge[]>()
+  for (const e of edges) {
+    const efrom = eff(e.from_node)
+    const eto   = eff(e.to_node)
+    if (efrom === eto) continue
+    const key = `${efrom}\x00${eto}`
+    if (!buckets.has(key)) buckets.set(key, [])
+    buckets.get(key)!.push(e)
+  }
+
+  const collapsed = new Set<string>()
+  const synthetic: DisplayEdge[] = []
+
+  for (const [key, bucket] of buckets) {
+    if (bucket.length < 2) continue   // single edge → passthrough
+
+    const [efrom, eto] = key.split('\x00')
+    for (const e of bucket) collapsed.add(e.id)
+
+    const primary = bucket[0]
+    const descs   = bucket.map(e => e.description || e.label).filter(Boolean) as string[]
+
+    synthetic.push({
+      id:             `__grp__${efrom}__${eto}`,
+      from_node:      primary.from_node,
+      from_group_id:  groupIds.has(efrom) ? efrom : undefined,
+      to_node:        groupIds.has(eto)   ? undefined : eto,
+      to_group_id:    groupIds.has(eto)   ? eto       : undefined,
+      style:          primary.style,
+      direction:      primary.direction,
+      label:          undefined,
+      description:    descs.join('; ') || undefined,
+      collapsedCount: bucket.length,
+    })
+  }
+
+  // All edges not collapsed (intra-group + single cross-container edges)
+  const passthrough: DisplayEdge[] = edges
+    .filter(e => !collapsed.has(e.id))
+    .map(e => ({
+      id:             e.id,
+      from_node:      e.from_node,
+      to_node:        e.to_node,
+      style:          e.style,
+      direction:      e.direction,
+      label:          e.label ?? undefined,
+      description:    e.description ?? undefined,
+      collapsedCount: 1,
+    }))
+
+  return [...passthrough, ...synthetic]
+})
 
 // ── Canvas bounds ──────────────────────────────────────────────────────────
 const canvasW = computed(() => {
@@ -150,10 +261,175 @@ function routeEdge(fromId: string, toId: string): string {
   return `M ${x1} ${y1} C ${x1 + sx * cLen} ${y1 + sy * cLen} ${x2 - sx * cLen} ${y2 - sy * cLen} ${x2} ${y2}`
 }
 
-// Computed map so edge paths re-evaluate reactively when positions change
+// Route from a node to the nearest point on a group bounding box border.
+// Mirrors routeEdge's face-selection logic: picks the midpoint of whichever
+// face of the box is most directly in front of the source node.
+function routeEdgeToBox(
+  fromId: string,
+  bx: number, by: number, bw: number, bh: number,
+): { path: string; ex: number; ey: number } | null {
+  const s = pos[fromId]
+  if (!s) return null
+
+  const scx = s.x + NODE_W / 2, scy = s.y + NODE_H / 2
+  const gcx = bx + bw / 2,      gcy = by + bh / 2
+  const dx  = gcx - scx,        dy  = gcy - scy
+
+  // Exit point on source node face
+  let x1: number, y1: number
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    ;[x1, y1] = dx >= 0 ? [s.x + NODE_W, scy] : [s.x, scy]
+  } else {
+    ;[x1, y1] = dy >= 0 ? [scx, s.y + NODE_H] : [scx, s.y]
+  }
+
+  // Entry point on group box border — midpoint of the facing face
+  let x2: number, y2: number
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    ;[x2, y2] = dx >= 0 ? [bx, gcy] : [bx + bw, gcy]
+  } else {
+    ;[x2, y2] = dy >= 0 ? [gcx, by] : [gcx, by + bh]
+  }
+
+  const isH  = Math.abs(dx) >= Math.abs(dy)
+  const cLen = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 0.45
+  const sx   = isH ? Math.sign(x2 - x1) : 0
+  const sy   = isH ? 0 : Math.sign(y2 - y1)
+
+  return {
+    path: `M ${x1} ${y1} C ${x1 + sx * cLen} ${y1 + sy * cLen} ${x2 - sx * cLen} ${y2 - sy * cLen} ${x2} ${y2}`,
+    ex: x2,
+    ey: y2,
+  }
+}
+
+// Route from a group bounding box border to a target node.
+// Symmetric counterpart of routeEdgeToBox.
+function routeBoxToNode(
+  bx: number, by: number, bw: number, bh: number,
+  toId: string,
+): { path: string; x1: number; y1: number } | null {
+  const d = pos[toId]
+  if (!d) return null
+
+  const gcx = bx + bw / 2, gcy = by + bh / 2
+  const dcx = d.x + NODE_W / 2, dcy = d.y + NODE_H / 2
+  const dx = dcx - gcx, dy = dcy - gcy
+
+  // Exit on group box border — midpoint of facing face
+  let x1: number, y1: number
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    ;[x1, y1] = dx >= 0 ? [bx + bw, gcy] : [bx, gcy]
+  } else {
+    ;[x1, y1] = dy >= 0 ? [gcx, by + bh] : [gcx, by]
+  }
+
+  // Entry on target node face
+  let x2: number, y2: number
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    ;[x2, y2] = dx >= 0 ? [d.x, dcy] : [d.x + NODE_W, dcy]
+  } else {
+    ;[x2, y2] = dy >= 0 ? [dcx, d.y] : [dcx, d.y + NODE_H]
+  }
+
+  const isH  = Math.abs(dx) >= Math.abs(dy)
+  const cLen = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 0.45
+  const sx   = isH ? Math.sign(x2 - x1) : 0
+  const sy   = isH ? 0 : Math.sign(y2 - y1)
+
+  return {
+    path: `M ${x1} ${y1} C ${x1 + sx * cLen} ${y1 + sy * cLen} ${x2 - sx * cLen} ${y2 - sy * cLen} ${x2} ${y2}`,
+    x1, y1,
+  }
+}
+
+// Route between two group bounding boxes.
+function routeBoxToBox(
+  ax: number, ay: number, aw: number, ah: number,
+  bx: number, by: number, bw: number, bh: number,
+): { path: string; x1: number; y1: number; x2: number; y2: number } | null {
+  const acx = ax + aw / 2, acy = ay + ah / 2
+  const bcx = bx + bw / 2, bcy = by + bh / 2
+  const dx = bcx - acx, dy = bcy - acy
+
+  // Exit on source box A
+  let x1: number, y1: number
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    ;[x1, y1] = dx >= 0 ? [ax + aw, acy] : [ax, acy]
+  } else {
+    ;[x1, y1] = dy >= 0 ? [acx, ay + ah] : [acx, ay]
+  }
+
+  // Entry on target box B
+  let x2: number, y2: number
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    ;[x2, y2] = dx >= 0 ? [bx, bcy] : [bx + bw, bcy]
+  } else {
+    ;[x2, y2] = dy >= 0 ? [bcx, by] : [bcx, by + bh]
+  }
+
+  const isH  = Math.abs(dx) >= Math.abs(dy)
+  const cLen = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 0.45
+  const sx   = isH ? Math.sign(x2 - x1) : 0
+  const sy   = isH ? 0 : Math.sign(y2 - y1)
+
+  return {
+    path: `M ${x1} ${y1} C ${x1 + sx * cLen} ${y1 + sy * cLen} ${x2 - sx * cLen} ${y2 - sy * cLen} ${x2} ${y2}`,
+    x1, y1, x2, y2,
+  }
+}
+
+// Computed map so edge paths re-evaluate reactively when positions change.
+// Dispatches to one of four routing functions based on edge endpoint types.
 const edgePaths = computed(() => {
   const m: Record<string, string> = {}
-  for (const e of visibleEdges.value) m[e.id] = routeEdge(e.from_node, e.to_node)
+  for (const de of displayEdges.value) {
+    const fgb = de.from_group_id ? groupBoundsMap.value[de.from_group_id] : null
+    const tgb = de.to_group_id   ? groupBoundsMap.value[de.to_group_id]   : null
+
+    if (fgb && tgb) {
+      // Group → Group
+      m[de.id] = routeBoxToBox(fgb.x, fgb.y, fgb.w, fgb.h, tgb.x, tgb.y, tgb.w, tgb.h)?.path ?? ''
+    } else if (fgb && de.to_node) {
+      // Group → Node
+      m[de.id] = routeBoxToNode(fgb.x, fgb.y, fgb.w, fgb.h, de.to_node)?.path ?? ''
+    } else if (tgb) {
+      // Node → Group
+      m[de.id] = routeEdgeToBox(de.from_node, tgb.x, tgb.y, tgb.w, tgb.h)?.path ?? ''
+    } else if (de.to_node) {
+      // Node → Node
+      m[de.id] = routeEdge(de.from_node, de.to_node)
+    }
+  }
+  return m
+})
+
+// Badge position for collapsed group edges.
+// – to_group_id only:                badge at target group border entry
+// – from_group_id only (→ node):     badge at source group border exit
+// – from_group_id + to_group_id:     badge at target group border entry
+const groupEdgeBadgePos = computed(() => {
+  const m: Record<string, { x: number; y: number }> = {}
+  for (const de of displayEdges.value) {
+    if (de.collapsedCount <= 1) continue
+    const fgb = de.from_group_id ? groupBoundsMap.value[de.from_group_id] : null
+    const tgb = de.to_group_id   ? groupBoundsMap.value[de.to_group_id]   : null
+
+    if (tgb) {
+      // Badge at target group entry
+      if (fgb) {
+        const r = routeBoxToBox(fgb.x, fgb.y, fgb.w, fgb.h, tgb.x, tgb.y, tgb.w, tgb.h)
+        if (r) m[de.id] = { x: r.x2, y: r.y2 }
+      } else {
+        const r = routeEdgeToBox(de.from_node, tgb.x, tgb.y, tgb.w, tgb.h)
+        if (r) m[de.id] = { x: r.ex, y: r.ey }
+      }
+    } else if (fgb && de.to_node) {
+      // Badge at source group exit (outbound collapse)
+      const r = routeBoxToNode(fgb.x, fgb.y, fgb.w, fgb.h, de.to_node)
+      if (r) m[de.id] = { x: r.x1, y: r.y1 }
+    }
+  }
   return m
 })
 
@@ -172,18 +448,6 @@ function gBounds(g: DiagramGroup) {
 const groupBoundsMap = computed(() => {
   const m: Record<string, ReturnType<typeof gBounds>> = {}
   for (const g of visibleGroups.value) m[g.id] = gBounds(g)
-  return m
-})
-
-// ── Edge label midpoint ────────────────────────────────────────────────────
-const edgeMids = computed(() => {
-  const m: Record<string, { x: number; y: number }> = {}
-  for (const e of visibleEdges.value) {
-    if (!e.label) continue
-    const s = pos[e.from_node]; const d = pos[e.to_node]
-    if (!s || !d) continue
-    m[e.id] = { x: (s.x + d.x + NODE_W) / 2, y: (s.y + d.y + NODE_H) / 2 - 8 }
-  }
   return m
 })
 
@@ -277,6 +541,16 @@ function fitView() {
 
 // ── Drag ───────────────────────────────────────────────────────────────────
 const drag = ref<{ id: string; offX: number; offY: number } | null>(null)
+
+// Group drag — moves all member nodes together
+interface GroupDragState {
+  groupId: string
+  memberIds: string[]
+  /** Per-node offset from the SVG pointer position at drag start. */
+  offsets: Record<string, { dx: number; dy: number }>
+}
+const groupDrag = ref<GroupDragState | null>(null)
+
 let _pdClient = { x: 0, y: 0 }  // pointerdown client coords, used to detect click vs drag
 
 function toSvg(cx: number, cy: number) {
@@ -308,8 +582,23 @@ function onNodePointerDown(e: PointerEvent, id: string) {
   ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
 }
 
+function onGroupPointerDown(e: PointerEvent, g: DiagramGroup) {
+  e.stopPropagation()
+  if (tool.value === 'connect') return
+  _pdClient = { x: e.clientX, y: e.clientY }
+
+  const sv = toSvg(e.clientX, e.clientY)
+  const offsets: Record<string, { dx: number; dy: number }> = {}
+  for (const nid of g.contains) {
+    const p = pos[nid]
+    if (p) offsets[nid] = { dx: sv.x - p.x, dy: sv.y - p.y }
+  }
+  groupDrag.value = { groupId: g.id, memberIds: g.contains, offsets }
+  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+}
+
 function onCanvasPointerDown(e: PointerEvent) {
-  if (e.button !== 0 || drag.value) return
+  if (e.button !== 0 || drag.value || groupDrag.value) return
   _pdClient = { x: e.clientX, y: e.clientY }
 
   if (tool.value === 'lasso') {
@@ -336,6 +625,15 @@ function onPointerMove(e: PointerEvent) {
   if (drag.value) {
     const sv = toSvg(e.clientX, e.clientY)
     pos[drag.value.id] = { x: Math.max(0, sv.x - drag.value.offX), y: Math.max(0, sv.y - drag.value.offY) }
+    return
+  }
+  if (groupDrag.value) {
+    const sv = toSvg(e.clientX, e.clientY)
+    for (const nid of groupDrag.value.memberIds) {
+      const off = groupDrag.value.offsets[nid]
+      if (!off) continue
+      pos[nid] = { x: Math.max(0, sv.x - off.dx), y: Math.max(0, sv.y - off.dy) }
+    }
     return
   }
   if (isPanning.value) {
@@ -371,6 +669,14 @@ function onPointerUp(e: PointerEvent) {
       handleSelect(drag.value.id, e.ctrlKey || e.metaKey)
     }
     drag.value = null
+  } else if (groupDrag.value) {
+    if (moved) {
+      for (const nid of groupDrag.value.memberIds) {
+        const p = pos[nid]
+        if (p) updateNodePosition(nid, p.x, p.y)
+      }
+    }
+    groupDrag.value = null
   } else if (isPanning.value && !moved) {
     selected.clear()
   }
@@ -434,13 +740,23 @@ function duplicateNode(id: string) {
 
 function resetLayout() {
   if (!dir.value) return
-  const computed = autoLayout(dir.value)
+  // No stored seed — forces a fresh BFS + full optimization pass
+  const computed = autoLayout(dir.value, undefined, { nodeW: NODE_W, nodeH: NODE_H })
   for (const [id, p] of Object.entries(computed)) {
     pos[id] = p
     updateNodePosition(id, p.x, p.y)
   }
   nextTick(fitView)
 }
+
+// ── External layout reset (triggered by SyncBar "Recalibrate") ────────────
+// Watches layoutResetToken from useSystem. When incremented, clears all
+// stored positions and runs a full fresh layout — same as resetLayout() but
+// initiated from outside the canvas.
+watch(layoutResetToken, (token) => {
+  if (token === 0) return   // initial value, don't fire on mount
+  resetLayout()
+})
 
 const ctxMenuItems = computed((): CtxItem[] => {
   const ctx = ctxMenu.value
@@ -518,7 +834,7 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
   <div
     ref="container"
     :class="['diagram-canvas', {
-      'diagram-canvas--panning': isPanning && !drag,
+      'diagram-canvas--panning': isPanning && !drag && !groupDrag,
       'diagram-canvas--drop': isDragOver,
       'diagram-canvas--lasso': tool === 'lasso',
       'diagram-canvas--connect': tool === 'connect',
@@ -558,7 +874,11 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
         <!-- ── Groups (behind everything) ────────────────────────────────── -->
         <g id="sw-groups">
           <template v-for="g in visibleGroups" :key="g.id">
-            <template v-if="groupBoundsMap[g.id]">
+            <g
+              v-if="groupBoundsMap[g.id]"
+              :class="['sw-group', { 'sw-group--dragging': groupDrag?.groupId === g.id }]"
+              @pointerdown.stop="onGroupPointerDown($event, g)"
+            >
               <rect
                 :x="groupBoundsMap[g.id]!.x"
                 :y="groupBoundsMap[g.id]!.y"
@@ -569,57 +889,61 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
                 stroke="#bbb"
                 stroke-width="1.5"
                 stroke-dasharray="6 3"
+                style="cursor: grab"
               />
               <text
                 :x="groupBoundsMap[g.id]!.x + 10"
                 :y="groupBoundsMap[g.id]!.y + 17"
                 class="sw-group-label"
+                style="cursor: grab; pointer-events: none"
               >{{ g.label }}</text>
-            </template>
+            </g>
           </template>
         </g>
 
         <!-- ── Edges ─────────────────────────────────────────────────────── -->
         <g id="sw-edges">
           <g
-            v-for="e in visibleEdges"
-            :key="e.id"
-            :class="['sw-edge', { 'sw-edge--selected': selected.has(e.id) }]"
+            v-for="de in displayEdges"
+            :key="de.id"
+            :class="['sw-edge', { 'sw-edge--selected': selected.has(de.id) }]"
             style="cursor: pointer"
             @pointerdown.stop="_pdClient = { x: $event.clientX, y: $event.clientY }"
-            @click.stop="handleSelect(e.id, $event.ctrlKey || $event.metaKey)"
-            @contextmenu.prevent.stop="openCtxEdge($event, e.id)"
+            @click.stop="handleSelect(de.id, $event.ctrlKey || $event.metaKey)"
+            @contextmenu.prevent.stop="openCtxEdge($event, de.id)"
           >
             <!-- Wide invisible hit area -->
-            <path :d="edgePaths[e.id]" fill="none" stroke="transparent" stroke-width="12" />
-            <!-- Visible stroke -->
+            <path :d="edgePaths[de.id]" fill="none" stroke="transparent" stroke-width="12" />
+            <!-- Visible stroke — group edges render slightly lighter to distinguish them -->
             <path
               class="sw-edge-line"
-              :d="edgePaths[e.id]"
+              :d="edgePaths[de.id]"
               fill="none"
-              :stroke="selected.has(e.id) ? 'var(--accent)' : '#8da8c8'"
-              :stroke-width="selected.has(e.id) ? 2.5 : 1.5"
-              :stroke-dasharray="DASH[e.style]"
-              :marker-end="e.direction !== 'backward' ? (selected.has(e.id) ? 'url(#sw-arr-sel)' : 'url(#sw-arr)') : undefined"
-              :marker-start="e.direction === 'bidirectional' || e.direction === 'backward' ? (selected.has(e.id) ? 'url(#sw-arr-rev-sel)' : 'url(#sw-arr-rev)') : undefined"
+              :stroke="selected.has(de.id) ? 'var(--accent)' : (de.to_group_id || de.from_group_id ? '#aac4e0' : '#8da8c8')"
+              :stroke-width="selected.has(de.id) ? 2.5 : 1.5"
+              :stroke-dasharray="de.to_group_id || de.from_group_id ? '6 3' : DASH[de.style]"
+              :marker-end="de.direction !== 'backward' ? (selected.has(de.id) ? 'url(#sw-arr-sel)' : 'url(#sw-arr)') : undefined"
+              :marker-start="de.direction === 'bidirectional' || de.direction === 'backward' ? (selected.has(de.id) ? 'url(#sw-arr-rev-sel)' : 'url(#sw-arr-rev)') : undefined"
             />
-            <template v-if="e.label && edgeMids[e.id]">
-              <rect
-                :x="edgeMids[e.id].x - 22"
-                :y="edgeMids[e.id].y - 8"
-                width="44" height="14"
-                rx="3"
-                fill="var(--canvas-bg)"
-                stroke="var(--canvas-border)"
-                stroke-width="0.5"
+            <!-- Collapsed count badge — at group border entry (inbound) or exit (outbound) -->
+            <template v-if="de.collapsedCount > 1 && groupEdgeBadgePos[de.id]">
+              <circle
+                :cx="groupEdgeBadgePos[de.id].x"
+                :cy="groupEdgeBadgePos[de.id].y"
+                r="9"
+                fill="var(--bg-chrome)"
+                stroke="#aac4e0"
+                stroke-width="1"
               />
               <text
-                :x="edgeMids[e.id].x"
-                :y="edgeMids[e.id].y + 2"
-                class="sw-edge-label"
+                :x="groupEdgeBadgePos[de.id].x"
+                :y="groupEdgeBadgePos[de.id].y + 4"
                 text-anchor="middle"
-              >{{ e.label }}</text>
+                style="font: bold 9px system-ui, sans-serif; fill: #7aa3c4; pointer-events: none;"
+              >{{ de.collapsedCount }}</text>
             </template>
+            <!-- Edge label text is intentionally hidden — diagrams stay clean.
+                 de.label / de.description is preserved for future hover/tooltip. -->
           </g>
         </g>
 
@@ -968,6 +1292,11 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
   font: 600 11px system-ui, sans-serif;
   fill: #7a8ba8;
   pointer-events: none;
+}
+.sw-group--dragging rect {
+  cursor: grabbing !important;
+  stroke: var(--accent);
+  stroke-width: 2;
 }
 
 /* ── Controls ──────────────────────────────────────────────────────────── */

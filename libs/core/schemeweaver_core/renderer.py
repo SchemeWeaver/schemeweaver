@@ -221,10 +221,11 @@ class Renderer:
         x2 = to_lnode.x + to_lnode.width / 2
         y2 = to_lnode.y
 
+        detail = edge.description or edge.label or "connection"
         g = ET.SubElement(parent, "g", {
             "id":         f"edge-{edge.id}",
             "class":      "sw-edge",
-            "aria-label": f"{edge.label or 'connection'}: {edge.from_node} to {edge.to_node}",
+            "aria-label": f"{detail}: {edge.from_node} to {edge.to_node}",
         })
 
         stroke_dasharray = {"solid": "", "dashed": "8,4", "dotted": "2,3"}.get(
@@ -239,13 +240,8 @@ class Renderer:
             line_attrs["stroke-dasharray"] = stroke_dasharray
         ET.SubElement(g, "line", line_attrs)
 
-        if edge.label:
-            mid_x = (x1 + x2) / 2
-            mid_y = (y1 + y2) / 2
-            label_el = ET.SubElement(g, "text", {
-                "x": str(mid_x + 6), "y": str(mid_y), "text-anchor": "start",
-            })
-            label_el.text = edge.label
+        # Edge labels are intentionally not rendered — keep diagrams clean.
+        # The full description is preserved in edge.description for hover/tooltip use.
 
     def _render_group(
         self, parent: ET.Element, group: DiagramGroup, dir: DIR, layout: Layout

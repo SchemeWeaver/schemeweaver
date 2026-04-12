@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 
-from .dir import DIR
+from .dir import DIR, DiagramType
 
 
 # ── Ontology enums ─────────────────────────────────────────────────────────────
@@ -42,13 +42,8 @@ class EntityStatus(str, Enum):
     PLANNED    = "planned"
 
 
-class DiagramType(str, Enum):
-    ARCHITECTURE = "architecture"
-    SEQUENCE     = "sequence"
-    ER           = "er"
-    FLOWCHART    = "flowchart"
-    GENERIC      = "generic"
-
+# DiagramType is imported from .dir — defined once, used here for View.diagram_type.
+# Re-exported via models/__init__.py for convenience.
 
 # ── Ontology models ────────────────────────────────────────────────────────────
 
@@ -75,6 +70,8 @@ class OntologyEntity(BaseModel):
     tags:        list[str] = Field(default_factory=list)
     owner:       Optional[EntityOwner] = None
     tech:        Optional[EntityTech] = None
+    # simple-icons slug for the technology (e.g. "redis", "postgresql", "docker")
+    technology:  Optional[str] = None
     metadata:    dict[str, Any] = Field(default_factory=dict)
 
 

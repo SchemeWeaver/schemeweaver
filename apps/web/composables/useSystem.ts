@@ -22,6 +22,12 @@ const systems         = ref<SystemSummary[]>([])
 const loadingList     = ref(false)
 const listError       = ref<string | null>(null)
 
+/**
+ * Incrementing counter watched by DiagramCanvas.
+ * Bump it to request a full fresh layout (ignores stored positions).
+ */
+const layoutResetToken = ref(0)
+
 // ── Derived ────────────────────────────────────────────────────────────────
 const activeView = computed<View | null>(() => {
   if (!currentSystem.value || !activeViewId.value) return null
@@ -310,6 +316,11 @@ export function useSystem() {
     error.value         = null
   }
 
+  /** Signal DiagramCanvas to discard all stored positions and re-run a fresh layout. */
+  function requestLayoutReset(): void {
+    layoutResetToken.value++
+  }
+
   /** Re-render the active view's SVG from the server. */
   async function _renderActiveView(): Promise<void> {
     if (!currentSystem.value || !activeViewId.value) return
@@ -325,20 +336,21 @@ export function useSystem() {
 
   return {
     // State
-    currentSystem:  readonly(currentSystem) as Ref<System | null>,
-    activeView:     activeView as ComputedRef<View | null>,
-    dir:            dir as ComputedRef<DIR | null>,
-    svg:            readonly(svg),
-    mermaid:        readonly(mermaid),
-    issues:         readonly(issues),
-    loading:        readonly(loading),
-    error:          readonly(error),
-    saving:         readonly(saving),
+    currentSystem:     readonly(currentSystem) as Ref<System | null>,
+    activeView:        activeView as ComputedRef<View | null>,
+    dir:               dir as ComputedRef<DIR | null>,
+    svg:               readonly(svg),
+    mermaid:           readonly(mermaid),
+    issues:            readonly(issues),
+    loading:           readonly(loading),
+    error:             readonly(error),
+    saving:            readonly(saving),
     selectedModel,
-    systems:        readonly(systems),
-    loadingList:    readonly(loadingList),
-    listError:      readonly(listError),
-    activeViewId:   readonly(activeViewId),
+    systems:           readonly(systems),
+    loadingList:       readonly(loadingList),
+    listError:         readonly(listError),
+    activeViewId:      readonly(activeViewId),
+    layoutResetToken:  readonly(layoutResetToken),
     // Actions
     generate,
     refine,
@@ -358,5 +370,6 @@ export function useSystem() {
     updateNode,
     updateEdge,
     updateNodePosition,
+    requestLayoutReset,
   }
 }

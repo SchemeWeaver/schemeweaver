@@ -3,14 +3,19 @@ import asyncio
 import json
 import logging
 import urllib.request
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 log = logging.getLogger("schemeweaver.generate")
 
 from schemeweaver_core.exporters import MermaidExporter
+from schemeweaver_core.models import (
+    GenerateRequest,
+    GenerateResponse,
+    ModelInfo,
+    ModelsResponse,
+    UpdateRequest,
+)
 from schemeweaver_core.pipeline import Pipeline
 from schemeweaver_core.providers import make_provider
 from schemeweaver_core.renderer import Renderer
@@ -107,39 +112,6 @@ def _default_model(models: list["ModelInfo"]) -> str:
     if first is None:
         raise ValueError("No accessible model found. Add an API key or start Ollama.")
     return first
-
-
-# ── Pydantic models ────────────────────────────────────────────────────────────
-
-class GenerateRequest(BaseModel):
-    prompt: str
-    context: Optional[str] = None
-    model: Optional[str] = None
-
-
-class GenerateResponse(BaseModel):
-    svg: str
-    dir: dict
-    mermaid: str = ""
-    issues: list[str] = []
-    model: str = ""
-
-
-class UpdateRequest(BaseModel):
-    dir: dict
-    feedback: str
-    model: Optional[str] = None
-
-
-class ModelInfo(BaseModel):
-    id: str
-    provider: str
-    accessible: bool
-
-
-class ModelsResponse(BaseModel):
-    default: str
-    models: list[ModelInfo]
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────

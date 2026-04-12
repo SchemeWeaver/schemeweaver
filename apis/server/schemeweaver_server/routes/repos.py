@@ -1,10 +1,9 @@
 """Repos endpoints — analyze a local path or git URL to produce a Knowledge Base."""
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
+from schemeweaver_core.models import AnalyzeRepoRequest, AnalyzeRepoResponse
 from schemeweaver_core.repo_analyzer import RepoAnalyzer
 
 log = logging.getLogger("schemeweaver.repos")
@@ -12,16 +11,6 @@ router = APIRouter()
 
 _analyzer = RepoAnalyzer()
 
-
-class AnalyzeRepoRequest(BaseModel):
-    source: str                     # local path or git URL
-    shallow: bool = True            # reserved for future depth control
-
-
-class AnalyzeRepoResponse(BaseModel):
-    repo_name: str
-    source: str
-    knowledge_base: str             # compiled markdown
 
 
 @router.post("/repos/analyze", response_model=AnalyzeRepoResponse)

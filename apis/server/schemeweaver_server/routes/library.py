@@ -1,10 +1,15 @@
 """Library endpoints — browse and load diagrams saved to data/out/."""
 import json
 import re
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+
+from schemeweaver_core.models import (
+    DiagramEntry,
+    DiagramSummary,
+    SaveRequest,
+    SaveResponse,
+)
 
 from ..config import settings
 
@@ -24,38 +29,6 @@ def _unique_slug(base: str, out: "Path") -> str:  # type: ignore[name-defined]
         i += 1
     return f"{base}-{i}"
 
-
-class DiagramSummary(BaseModel):
-    slug: str
-    title: str
-    diagram_type: str
-    nodes: int
-    edges: int
-    groups: int
-    elapsed_s: float
-    issues: list[str] = []
-    model: str = ""
-
-
-class DiagramEntry(BaseModel):
-    svg: str
-    dir: dict
-    mermaid: str = ""
-    issues: list[str] = []
-    model: str = ""
-
-
-class SaveRequest(BaseModel):
-    dir: dict
-    svg: str
-    mermaid: str = ""
-    issues: list[str] = []
-    model: str = ""
-    slug: Optional[str] = None  # provided → overwrite, omitted → new
-
-
-class SaveResponse(BaseModel):
-    slug: str
 
 
 def _out_dir():

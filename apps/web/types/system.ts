@@ -16,7 +16,7 @@ export type RelationshipType =
 
 export type EntityStatus = 'active' | 'deprecated' | 'planned'
 
-export type SystemDiagramType = 'architecture' | 'sequence' | 'er' | 'flowchart' | 'generic'
+export type SystemDiagramType = 'architecture' | 'sequence' | 'erd' | 'flowchart' | 'generic'
 
 // ── Ontology models ────────────────────────────────────────────────────────
 
@@ -43,6 +43,7 @@ export interface OntologyEntity {
   tags:        string[]
   owner?:      EntityOwner
   tech?:       EntityTech
+  technology?: string        // simple-icons slug (e.g. 'redis', 'postgresql')
   metadata:    Record<string, string>
 }
 

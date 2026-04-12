@@ -3,7 +3,7 @@
  * Field names match Python model_dump() output: from_node / to_node (not from/to).
  */
 
-export type DiagramType = 'architecture' | 'sequence' | 'er' | 'flowchart' | 'generic'
+export type DiagramType = 'architecture' | 'sequence' | 'erd' | 'flowchart' | 'generic'
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted'
 export type EdgeDirection = 'forward' | 'backward' | 'bidirectional'
 
@@ -54,7 +54,10 @@ export interface DiagramEdge {
   id: string
   from_node: string   // NOTE: Python model_dump() uses from_node, not from
   to_node: string     // NOTE: Python model_dump() uses to_node, not to
+  /** Short visible label. Intentionally empty in most diagrams — use description for hover. */
   label?: string
+  /** Full relationship description, preserved for hover/tooltip display. */
+  description?: string
   style: EdgeStyle
   direction: EdgeDirection
 }

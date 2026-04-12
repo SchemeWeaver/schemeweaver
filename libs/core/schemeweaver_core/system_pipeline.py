@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 
 from .models.dir import DiagramType
 from .models.system import (
-    DiagramType as SystemDiagramType,
     EntityStatus,
     EntityType,
     Ontology,
@@ -43,7 +42,8 @@ Output ONLY this JSON structure (no markdown, no explanation):
         "description": string,
         "domain": string,
         "status": "active" | "deprecated" | "planned",
-        "tags": [string]
+        "tags": [string],
+        "technology": string | null  // simple-icons slug for the primary technology (e.g. "redis", "postgresql", "docker", "nginx", "kafka", "mongodb", "elasticsearch", "kubernetes", "fastapi", "django", "spring", "mysql", "rabbitmq", "grafana", "prometheus"); null if unknown or custom
       }
     ],
     "relationships": [
@@ -63,6 +63,10 @@ Rules:
 - Every relationship needs a unique kebab-case id
 - Infer relationships from dependencies (e.g. a service that depends on Postgres "stores_in" a database entity)
 - Group components into logical domains based on manifest paths or naming
+- Set technology to a simple-icons slug when the technology is clearly identifiable from name or context; omit otherwise
+- Only include architecturally significant relationships — the most important 1 connection per entity pair
+- Prefer direct data-flow relationships (calls, stores_in) over ownership/management relationships
+- Keep relationship descriptions concise: 5–10 words maximum
 - Output ONLY valid JSON"""
 
 
@@ -82,7 +86,8 @@ Output ONLY this JSON structure (no markdown, no explanation):
         "description": string,
         "domain": string,    // bounded context / domain (e.g. "payments", "auth")
         "status": "active" | "deprecated" | "planned",
-        "tags": [string]
+        "tags": [string],
+        "technology": string | null  // simple-icons slug for the primary technology (e.g. "redis", "postgresql", "docker", "nginx", "kafka", "mongodb", "elasticsearch", "kubernetes", "fastapi", "django", "spring", "mysql", "rabbitmq", "grafana", "prometheus"); null if unknown or custom
       }
     ],
     "relationships": [
@@ -102,6 +107,10 @@ Rules:
 - Every relationship needs a unique kebab-case id
 - Capture all meaningful components and their connections
 - Group components into logical domains
+- Set technology to a simple-icons slug when the technology is clearly identifiable from name or context; omit otherwise
+- Only include architecturally significant relationships — the most important 1 connection per entity pair
+- Prefer direct data-flow relationships (calls, stores_in) over ownership/management relationships
+- Keep relationship descriptions concise: 5–10 words maximum
 - Output ONLY valid JSON"""
 
 
@@ -148,6 +157,12 @@ def _normalize_entity(e: dict) -> dict:
         e["status"] = "active"
     e.setdefault("tags", [])
     e.setdefault("description", "")
+    # Normalise technology: keep only if it's a non-empty string
+    tech = e.get("technology")
+    if not isinstance(tech, str) or not tech.strip():
+        e.pop("technology", None)
+    else:
+        e["technology"] = tech.strip().lower()
     return e
 
 
@@ -203,7 +218,7 @@ class SystemPipeline:
             id="view-overview",
             name="Overview",
             description="Full system overview derived from ontology",
-            diagram_type=SystemDiagramType.ARCHITECTURE,
+            diagram_type=DiagramType.ARCHITECTURE,
             scope=ViewScope(),
             dir=default_dir,
             created_at=now,
@@ -244,7 +259,7 @@ class SystemPipeline:
             id="view-overview",
             name="Overview",
             description="Full system overview derived from knowledge base",
-            diagram_type=SystemDiagramType.ARCHITECTURE,
+            diagram_type=DiagramType.ARCHITECTURE,
             scope=ViewScope(),
             dir=default_dir,
             created_at=now,

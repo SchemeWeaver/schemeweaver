@@ -78,7 +78,12 @@ class DiagramEdge(BaseModel):
     id: str
     from_node: str = Field(alias="from")
     to_node: str = Field(alias="to")
+    # Short visible label (shown on the diagram). Keep empty for a clean layout;
+    # use `description` to store the full semantic text for hover/tooltip later.
     label: Optional[str] = None
+    # Full human-readable description of the relationship — preserved for hover/
+    # tooltip display but not rendered as visible text on the diagram.
+    description: Optional[str] = None
     style: EdgeStyle = EdgeStyle.SOLID
     direction: EdgeDirection = EdgeDirection.FORWARD
 

@@ -4,13 +4,12 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
-from schemeweaver_core.models.dir import DiagramType
-from schemeweaver_core.models.system import (
+from schemeweaver_core.models import (
+    # Domain models
+    DiagramType,
     ActionLogEntry,
     ActionTarget,
     ActionType,
@@ -21,6 +20,18 @@ from schemeweaver_core.models.system import (
     System,
     View,
     ViewScope,
+    # API DTOs
+    AddViewRequest,
+    FromRepoRequest,
+    GenerateSystemRequest,
+    GenerateSystemResponse,
+    LogActionRequest,
+    SyncModelRequest,
+    SyncViewRequest,
+    SystemSummary,
+    UpdateOntologyRequest,
+    UpdateProseRequest,
+    ViewResponse,
 )
 from schemeweaver_core.ontology_to_dir import ontology_to_dir
 from schemeweaver_core.system_pipeline import SystemPipeline
@@ -122,59 +133,6 @@ def _build_pipeline(model_id: str | None = None) -> SystemPipeline:
 
     provider = make_provider(provider=provider_name, model=model_id, api_key=api_key, base_url=base_url)
     return SystemPipeline(provider)
-
-
-# ── Pydantic request/response models ──────────────────────────────────────────
-
-class SystemSummary(BaseModel):
-    slug: str
-    name: str
-    entity_count: int
-    view_count: int
-    updated_at: str
-
-
-class GenerateSystemRequest(BaseModel):
-    prompt: str
-    model: Optional[str] = None
-
-
-class GenerateSystemResponse(BaseModel):
-    slug: str
-    system: dict
-
-
-class UpdateProseRequest(BaseModel):
-    prose: str
-
-
-class UpdateOntologyRequest(BaseModel):
-    ontology: dict
-
-
-class AddViewRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-    scope: Optional[dict] = None
-
-
-class ViewResponse(BaseModel):
-    view_id: str
-    svg: str
-    dir: dict
-
-
-class SyncViewRequest(BaseModel):
-    view_id: str
-    model: Optional[str] = None
-
-
-class LogActionRequest(BaseModel):
-    action: str          # ActionType value
-    target_type: str
-    target_id: Optional[str] = None
-    view_context: Optional[str] = None
-    payload: dict = {}
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -433,12 +391,6 @@ def append_log(slug: str, req: LogActionRequest):
     return {"entry_id": entry.id}
 
 
-class FromRepoRequest(BaseModel):
-    source: str                   # local path or git URL
-    knowledge_base: Optional[str] = None  # pre-compiled KB markdown (from /repos/analyze)
-    model: Optional[str] = None
-
-
 @router.post("/systems/from-repo", response_model=GenerateSystemResponse)
 async def generate_system_from_repo(req: FromRepoRequest):
     """Analyze a repo (or use a pre-compiled KB) and generate a System.
@@ -488,10 +440,6 @@ async def generate_system_from_repo(req: FromRepoRequest):
     log.info("generate_system_from_repo  slug=%s  entities=%d", slug, len(system.ontology.entities))
 
     return GenerateSystemResponse(slug=slug, system=json.loads(system.model_dump_json()))
-
-
-class SyncModelRequest(BaseModel):
-    model: Optional[str] = None
 
 
 @router.post("/systems/{slug}/sync/kb-to-ontology")
@@ -639,5 +587,146 @@ async def sync_ontology_to_view(slug: str, req: SyncViewRequest):
 
     svg = renderer.render(new_dir)
     return {"svg": svg, "dir": json.loads(new_dir.model_dump_json())}
+
+
+# ── Icon enrichment ────────────────────────────────────────────────────────────
+
+# Ordered list of (keyword, simple-icons slug) pairs.
+# Matched case-insensitively against entity name + description.
+# More-specific entries must come before broader ones.
+_TECH_HINTS: list[tuple[str, str]] = [
+    # Databases
+    ("postgresql", "postgresql"), ("postgres", "postgresql"),
+    ("mysql", "mysql"), ("mariadb", "mariadb"),
+    ("mongodb", "mongodb"), ("mongo", "mongodb"),
+    ("redis", "redis"),
+    ("elasticsearch", "elasticsearch"), ("elastic", "elasticsearch"),
+    ("cassandra", "apachecassandra"),
+    ("dynamodb", "amazondynamodb"),
+    ("sqlite", "sqlite"),
+    ("cockroachdb", "cockroachlabs"),
+    ("neo4j", "neo4j"),
+    ("influxdb", "influxdb"),
+    ("clickhouse", "clickhouse"),
+    ("supabase", "supabase"),
+    ("planetscale", "planetscale"),
+    # Queues / streams
+    ("kafka", "apachekafka"),
+    ("rabbitmq", "rabbitmq"),
+    ("nats", "nats"),
+    ("sqs", "amazonsqs"),
+    ("pubsub", "googlepubsub"),
+    ("celery", "celery"),
+    # Web / API frameworks
+    ("fastapi", "fastapi"), ("fast api", "fastapi"),
+    ("django", "django"),
+    ("flask", "flask"),
+    ("spring boot", "spring"), ("spring", "spring"),
+    ("express", "express"),
+    ("nestjs", "nestjs"), ("nest.js", "nestjs"),
+    ("rails", "rubyonrails"),
+    ("laravel", "laravel"),
+    ("gin", "go"),
+    ("fiber", "go"),
+    ("actix", "rust"),
+    ("axum", "rust"),
+    # Infrastructure / platform
+    ("nginx", "nginx"),
+    ("apache", "apache"),
+    ("caddy", "caddy"),
+    ("traefik", "traefikproxy"),
+    ("docker", "docker"),
+    ("kubernetes", "kubernetes"), ("k8s", "kubernetes"),
+    ("helm", "helm"),
+    ("terraform", "terraform"),
+    ("ansible", "ansible"),
+    ("vault", "vault"),
+    ("consul", "consul"),
+    # Observability
+    ("prometheus", "prometheus"),
+    ("grafana", "grafana"),
+    ("loki", "grafana"),
+    ("jaeger", "jaeger"),
+    ("datadog", "datadog"),
+    ("newrelic", "newrelic"), ("new relic", "newrelic"),
+    ("sentry", "sentry"),
+    ("opentelemetry", "opentelemetry"),
+    # Auth
+    ("keycloak", "keycloak"),
+    ("auth0", "auth0"),
+    ("okta", "okta"),
+    ("cognito", "amazoncognito"),
+    # Storage / CDN
+    ("s3", "amazons3"),
+    ("minio", "minio"),
+    ("cloudflare", "cloudflare"),
+    # Cloud vendors (broad — match last)
+    ("lambda", "awslambda"),
+    ("fargate", "amazonecs"),
+    ("rds", "amazonrds"),
+]
+
+
+def _infer_technology(name: str, description: str | None) -> str | None:
+    """Return a simple-icons slug inferred from entity name/description, or None."""
+    haystack = (name + " " + (description or "")).lower()
+    for keyword, slug in _TECH_HINTS:
+        if keyword in haystack:
+            return slug
+    return None
+
+
+@router.post("/systems/{slug}/enrich-icons")
+def enrich_icons(slug: str):
+    """Backfill technology slugs on all ontology entities using name/description heuristics.
+
+    Entities that already have a technology set are left unchanged.
+    After enrichment, all views are re-synced from the updated ontology.
+    Returns counts of entities enriched and views re-synced.
+    """
+    from datetime import datetime, timezone
+
+    system = _load_system(slug)
+    now = datetime.now(timezone.utc)
+
+    enriched_ids: list[str] = []
+    updated_entities = []
+    for entity in system.ontology.entities:
+        if entity.technology:
+            updated_entities.append(entity)
+            continue
+        slug_guess = _infer_technology(entity.name, entity.description)
+        if slug_guess:
+            updated_entities.append(entity.model_copy(update={"technology": slug_guess}))
+            enriched_ids.append(entity.id)
+        else:
+            updated_entities.append(entity)
+
+    updated_ontology = system.ontology.model_copy(update={"entities": updated_entities})
+
+    # Re-sync every view from the updated ontology
+    updated_views = []
+    for view in system.views:
+        new_dir = ontology_to_dir(
+            updated_ontology,
+            title=view.name,
+            scope=view.scope,
+            diagram_type=DiagramType.ARCHITECTURE,
+        )
+        updated_views.append(view.model_copy(update={"dir": new_dir, "updated_at": now}))
+
+    system = system.model_copy(update={
+        "ontology": updated_ontology,
+        "views": updated_views,
+        "updated_at": now,
+    })
+    _save_system(system, slug)
+
+    log.info("enrich_icons  slug=%s  enriched=%d  views=%d", slug, len(enriched_ids), len(updated_views))
+    return {
+        "enriched": len(enriched_ids),
+        "enriched_ids": enriched_ids,
+        "views_resynced": len(updated_views),
+    }
 
 

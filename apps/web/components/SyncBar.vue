@@ -9,11 +9,13 @@ import { useWorkspace } from '~/composables/useWorkspace'
 
 type SyncOp = 'prose-to-ontology' | 'ontology-to-prose' | 'view-to-prose'
 
-const { currentSystem, activeViewId, saving, saveProse, saveOntology } = useSystem()
+const { currentSystem, activeViewId, saving, saveProse, saveOntology, loadSystem, requestLayoutReset } = useSystem()
 const { leftTab, setLeftTab } = useWorkspace()
 
-const syncing  = ref(false)
-const syncError = ref<string | null>(null)
+const syncing         = ref(false)
+const syncError       = ref<string | null>(null)
+const recalibrating   = ref(false)
+const recalibrateMsg  = ref<string | null>(null)
 
 // Preview state
 const previewProse    = ref<string | null>(null)
@@ -78,6 +80,28 @@ function dismiss(): void {
   syncError.value       = null
 }
 
+async function runRecalibrate(): Promise<void> {
+  if (!currentSystem.value || recalibrating.value) return
+  recalibrating.value = true
+  recalibrateMsg.value = null
+  syncError.value = null
+  try {
+    const slug = encodeURIComponent(currentSystem.value.slug)
+    // 1. Sync technology icons for all entities
+    await $fetch(`${apiBase}/v1/systems/${slug}/enrich-icons`, { method: 'POST' })
+    // 2. Reload the system so the canvas gets the updated node data
+    await loadSystem(currentSystem.value.slug)
+    // 3. Tell DiagramCanvas to discard stored positions and re-run a fresh layout
+    requestLayoutReset()
+    recalibrateMsg.value = 'Recalibrated'
+    setTimeout(() => { recalibrateMsg.value = null }, 2500)
+  } catch (e: unknown) {
+    syncError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    recalibrating.value = false
+  }
+}
+
 // Summary line for ontology preview
 const ontologyPreviewSummary = computed(() => {
   if (!previewOntology.value) return ''
@@ -126,6 +150,27 @@ const ontologyPreviewSummary = computed(() => {
       </svg>
       Prose → Ontology
     </button>
+
+    <span class="sync-bar__sep" />
+
+    <button
+      class="sync-bar__btn"
+      :disabled="recalibrating || saving"
+      title="Sync technology icons and recalculate the diagram layout from scratch"
+      @click="runRecalibrate"
+    >
+      <svg v-if="recalibrating" class="sync-bar__icon-spin" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M10 6A4 4 0 1 1 6 2c1.1 0 2.1.42 2.83 1.1L10 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M8 4.5h2.1V2.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <svg v-else width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 6a4 4 0 0 1 6.93-2.73L10 4.5M10 4.5V2.4M10 4.5H7.9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M10 6a4 4 0 0 1-6.93 2.73L2 7.5M2 7.5V9.6M2 7.5H4.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Recalibrate
+    </button>
+
+    <span v-if="recalibrateMsg" class="sync-bar__enrich-result">{{ recalibrateMsg }}</span>
 
     <span v-if="syncing" class="sync-bar__spinner-wrap">
       <span class="sync-bar__spinner" />
@@ -262,6 +307,24 @@ const ontologyPreviewSummary = computed(() => {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .sync-bar__syncing-text { font-size: 11px; color: var(--text-subtle); }
+
+.sync-bar__sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border-chrome);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.sync-bar__icon-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+.sync-bar__enrich-result {
+  font-size: 11px;
+  color: var(--success);
+  margin-left: 2px;
+}
 
 .sync-bar__error {
   display: inline-flex;
