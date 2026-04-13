@@ -73,11 +73,11 @@ watch(
         if (node.x != null && node.y != null) storedPos[node.id] = { x: node.x, y: node.y }
       }
 
-      const layout = autoLayout(
+      const layout = snapLayout(autoLayout(
         d,
         Object.keys(storedPos).length ? storedPos : undefined,
         { nodeW: NODE_W, nodeH: NODE_H },
-      )
+      ))
       for (const node of d.nodes) {
         pos[node.id] = layout[node.id] ?? { x: PAD, y: PAD }
       }
@@ -99,7 +99,7 @@ watch(
         }
       }
 
-      const layout = autoLayout(d, storedPos, { nodeW: NODE_W, nodeH: NODE_H })
+      const layout = snapLayout(autoLayout(d, storedPos, { nodeW: NODE_W, nodeH: NODE_H }))
 
       // Write back only nodes that don't already have a position
       for (const node of d.nodes) {
@@ -624,15 +624,34 @@ function onPointerMove(e: PointerEvent) {
   }
   if (drag.value) {
     const sv = toSvg(e.clientX, e.clientY)
-    pos[drag.value.id] = { x: Math.max(0, sv.x - drag.value.offX), y: Math.max(0, sv.y - drag.value.offY) }
+    pos[drag.value.id] = {
+      x: snap(Math.max(0, sv.x - drag.value.offX)),
+      y: snap(Math.max(0, sv.y - drag.value.offY)),
+    }
     return
   }
   if (groupDrag.value) {
     const sv = toSvg(e.clientX, e.clientY)
-    for (const nid of groupDrag.value.memberIds) {
-      const off = groupDrag.value.offsets[nid]
-      if (!off) continue
-      pos[nid] = { x: Math.max(0, sv.x - off.dx), y: Math.max(0, sv.y - off.dy) }
+    // Snap the group as a unit: snap the first member's candidate position,
+    // then apply the same integer offset to all other members so the group
+    // moves in locked grid steps without internal re-arrangement.
+    const firstId  = groupDrag.value.memberIds[0]
+    const firstOff = groupDrag.value.offsets[firstId]
+    if (firstOff) {
+      const rawX = sv.x - firstOff.dx
+      const rawY = sv.y - firstOff.dy
+      const snappedX = snap(Math.max(0, rawX))
+      const snappedY = snap(Math.max(0, rawY))
+      const dxSnap = snappedX - rawX
+      const dySnap = snappedY - rawY
+      for (const nid of groupDrag.value.memberIds) {
+        const off = groupDrag.value.offsets[nid]
+        if (!off) continue
+        pos[nid] = {
+          x: Math.max(0, sv.x - off.dx + dxSnap),
+          y: Math.max(0, sv.y - off.dy + dySnap),
+        }
+      }
     }
     return
   }
@@ -712,7 +731,7 @@ function onDrop(e: DragEvent) {
   const { nodeType, label, vendor, technology } = JSON.parse(raw) as { nodeType: string; label: string; vendor?: string; technology?: string }
   const sv = toSvg(e.clientX, e.clientY)
   const id = addNode(nodeType, label, vendor, technology)
-  if (id) pos[id] = { x: Math.max(0, sv.x - NODE_W / 2), y: Math.max(0, sv.y - NODE_H / 2) }
+  if (id) pos[id] = { x: snap(Math.max(0, sv.x - NODE_W / 2)), y: snap(Math.max(0, sv.y - NODE_H / 2)) }
 }
 
 // ── Context menu ───────────────────────────────────────────────────────────
@@ -735,13 +754,13 @@ function duplicateNode(id: string) {
   const newId = addNode(node.node_type, node.label)
   if (!newId) return
   updateNode(newId, { description: node.description })
-  pos[newId] = { x: p.x + 24, y: p.y + 24 }
+  pos[newId] = { x: snap(p.x + GRID), y: snap(p.y + GRID) }
 }
 
 function resetLayout() {
   if (!dir.value) return
   // No stored seed — forces a fresh BFS + full optimization pass
-  const computed = autoLayout(dir.value, undefined, { nodeW: NODE_W, nodeH: NODE_H })
+  const computed = snapLayout(autoLayout(dir.value, undefined, { nodeW: NODE_W, nodeH: NODE_H }))
   for (const [id, p] of Object.entries(computed)) {
     pos[id] = p
     updateNodePosition(id, p.x, p.y)
@@ -828,6 +847,24 @@ const vpStyle = computed(() => ({
 
 // ── Dash array ─────────────────────────────────────────────────────────────
 const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 3' }
+
+// ── Grid ────────────────────────────────────────────────────────────────────
+const GRID       = 20   // minor grid pitch (px) — drag snap resolution
+const GRID_MAJOR = 80   // major grid pitch (px) — visual reference every 4 cells
+
+/** Snap a coordinate to the nearest minor grid line. */
+function snap(v: number): number {
+  return Math.round(v / GRID) * GRID
+}
+
+/** Snap every position in a layout result map to the minor grid. */
+function snapLayout(
+  layout: Record<string, { x: number; y: number }>,
+): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {}
+  for (const [id, p] of Object.entries(layout)) out[id] = { x: snap(p.x), y: snap(p.y) }
+  return out
+}
 </script>
 
 <template>
@@ -857,6 +894,15 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
+          <!-- Minor grid — one small dot every 20 px -->
+          <pattern id="sw-grid-minor" :width="GRID" :height="GRID" patternUnits="userSpaceOnUse">
+            <circle cx="0.5" cy="0.5" r="0.6" fill="var(--grid-dot-minor)" />
+          </pattern>
+          <!-- Major grid — slightly larger dot every 80 px for orientation -->
+          <pattern id="sw-grid-major" :width="GRID_MAJOR" :height="GRID_MAJOR" patternUnits="userSpaceOnUse">
+            <circle cx="0.5" cy="0.5" r="1.2" fill="var(--grid-dot-major)" />
+          </pattern>
+
           <marker id="sw-arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
             <polygon points="0 0, 10 3.5, 0 7" fill="#888" />
           </marker>
@@ -870,6 +916,10 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
             <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent)" />
           </marker>
         </defs>
+
+        <!-- ── Grid background (minor + major layers) ──────────────────── -->
+        <rect width="100%" height="100%" fill="url(#sw-grid-minor)" pointer-events="none" />
+        <rect width="100%" height="100%" fill="url(#sw-grid-major)" pointer-events="none" />
 
         <!-- ── Groups (behind everything) ────────────────────────────────── -->
         <g id="sw-groups">
@@ -1208,6 +1258,14 @@ const DASH: Record<string, string> = { solid: 'none', dashed: '8 4', dotted: '2 
   position: relative;
   cursor: grab;
   user-select: none;
+  --grid-dot-minor: #d4d4dc;
+  --grid-dot-major: #b4b4c0;
+}
+@media (prefers-color-scheme: dark) {
+  .diagram-canvas {
+    --grid-dot-minor: #2e2e3e;
+    --grid-dot-major: #48485e;
+  }
 }
 .diagram-canvas--panning { cursor: grabbing; }
 .diagram-canvas--drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
